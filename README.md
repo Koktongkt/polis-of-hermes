@@ -13,6 +13,9 @@ A living ancient-Greek control surface for [Hermes Desktop](https://github.com/N
 - Concurrent-session activity cues and one-hour activity history
 - Calm environmental animation: sea currents, clouds, fountain water, smoke, particles, and slight asynchronous tree-canopy sway
 - Clickable citizens, occupation persistence, and Hermes-native conversation opening
+- Compact resizable agent panel with a persisted user-selected width
+- Expandable per-agent action cards with live status and one-hour activity logs
+- Theme-aware controls and a craft/character dropdown
 - Optional sound, disabled by default
 
 ## Installation

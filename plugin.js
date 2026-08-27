@@ -1635,94 +1635,200 @@ function StatusBadge({ status }) {
   })
 }
 
-function DetailPanel({ profile, onOccupation, onOpen }) {
+function ActivityLogRow({ item }) {
+  const icon = item.phase === 'failed' ? 'error' : item.phase === 'waiting' ? 'question' : item.phase === 'complete' ? 'check' : 'sync'
+  return jsxs('div', {
+    className: 'flex items-start gap-2 border-t border-(--ui-stroke-secondary) px-2.5 py-2 text-[0.6875rem] first:border-t-0',
+    children: [
+      jsx(Codicon, { name: icon, className: cx('mt-0.5 shrink-0', ['failed', 'waiting'].includes(item.phase) ? 'text-(--ui-accent)' : 'text-(--ui-text-tertiary)') }),
+      jsxs('div', {
+        className: 'min-w-0 flex-1',
+        children: [
+          jsx('div', { className: 'break-words font-medium text-(--ui-text-primary)', children: String(item.tool || item.type || 'task').replaceAll('_', ' ') }),
+          jsx('div', { className: 'mt-0.5 text-(--ui-text-quaternary)', children: `${toolCategoryLabel(item.category)} · ${relativeTime(item.at)}` }),
+          item.context ? jsx('p', { className: 'mt-1 break-words leading-4 text-(--ui-text-tertiary)', children: item.context }) : null
+        ]
+      })
+    ]
+  })
+}
+
+function AgentActivityCard({ agent, selected, expanded, onSelect, onToggle }) {
+  const history = agent.activityHistory || []
+  return jsxs('section', {
+    className: cx(
+      'overflow-hidden rounded-md border bg-(--ui-bg-primary)',
+      selected ? 'border-(--ui-accent)' : 'border-(--ui-stroke-secondary)'
+    ),
+    children: [
+      jsxs('button', {
+        type: 'button',
+        className: 'flex w-full items-center gap-2 px-2.5 py-2 text-left hover:bg-(--ui-bg-secondary)',
+        'aria-expanded': expanded,
+        onClick: () => { onSelect(agent.name); onToggle(agent.name) },
+        children: [
+          jsx(Codicon, { name: expanded ? 'chevron-down' : 'chevron-right', className: 'shrink-0 text-(--ui-text-quaternary)' }),
+          jsxs('div', {
+            className: 'min-w-0 flex-1',
+            children: [
+              jsx('div', { className: 'truncate text-xs font-semibold', children: agent.display_name || (agent.name === 'default' ? 'Hermes' : agent.name) }),
+              jsx('div', { className: 'truncate text-[0.625rem] text-(--ui-text-quaternary)', children: agent.activity ? `${toolCategoryLabel(agent.activity.category)} · ${String(agent.activity.tool || 'task').replaceAll('_', ' ')}` : history.length ? `${history.length} recent actions` : 'No recent actions' })
+            ]
+          }),
+          jsx(StatusBadge, { status: agent.status })
+        ]
+      }),
+      expanded ? jsxs('div', {
+        className: 'border-t border-(--ui-stroke-secondary) bg-(--ui-bg-secondary)',
+        children: [
+          agent.activity ? jsxs('div', {
+            className: 'border-b border-(--ui-stroke-secondary) px-2.5 py-2',
+            children: [
+              jsx('div', { className: 'text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-(--ui-accent)', children: agent.activity.phase === 'working' ? 'Live action' : 'Latest action' }),
+              jsx('div', { className: 'mt-1 break-words text-[0.6875rem] font-medium', children: `${toolCategoryLabel(agent.activity.category)} · ${String(agent.activity.tool || 'task').replaceAll('_', ' ')}` }),
+              agent.activity.context ? jsx('p', { className: 'mt-1 break-words text-[0.6875rem] leading-4 text-(--ui-text-tertiary)', children: agent.activity.context }) : null
+            ]
+          }) : null,
+          history.length
+            ? jsx('div', { children: history.slice(0, 12).map((item, index) => jsx(ActivityLogRow, { item }, `${agent.name}-${item.at}-${index}`)) })
+            : jsx('div', { className: 'px-3 py-3 text-[0.6875rem] text-(--ui-text-quaternary)', children: 'No recorded actions in the last hour.' })
+        ]
+      }) : null
+    ]
+  })
+}
+
+function DetailPanel({ profiles, profile, onSelect, onOccupation, onOpen }) {
+  const [width, setWidth] = useState(240)
+  const widthRef = useRef(width)
+  const [expandedAgents, setExpandedAgents] = useState(() => new Set(['default']))
+  widthRef.current = width
+
+  useEffect(() => {
+    let live = true
+    Promise.resolve(pluginContext?.storage?.get('detailPanelWidth'))
+      .then(value => {
+        if (value == null || value === '') return
+        const saved = Number(value)
+        if (live && Number.isFinite(saved)) setWidth(clamp(saved, 220, 480))
+      })
+      .catch(() => undefined)
+    return () => { live = false }
+  }, [])
+
+  useEffect(() => {
+    if (!profile?.name) return
+    setExpandedAgents(current => {
+      if (current.has(profile.name)) return current
+      const next = new Set(current)
+      next.add(profile.name)
+      return next
+    })
+  }, [profile?.name])
+
+  const persistWidth = useCallback(next => {
+    const adjusted = clamp(Math.round(next), 220, Math.min(480, Math.max(220, window.innerWidth * .45)))
+    widthRef.current = adjusted
+    setWidth(adjusted)
+    Promise.resolve(pluginContext?.storage?.set('detailPanelWidth', adjusted)).catch(() => undefined)
+  }, [])
+
+  const beginResize = event => {
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = widthRef.current
+    const move = moveEvent => {
+      const adjusted = clamp(startWidth + startX - moveEvent.clientX, 220, Math.min(480, Math.max(220, window.innerWidth * .45)))
+      widthRef.current = adjusted
+      setWidth(adjusted)
+    }
+    const finish = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', finish)
+      Promise.resolve(pluginContext?.storage?.set('detailPanelWidth', Math.round(widthRef.current))).catch(() => undefined)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', finish, { once: true })
+  }
+
+  const toggleAgent = name => setExpandedAgents(current => {
+    const next = new Set(current)
+    if (next.has(name)) next.delete(name)
+    else next.add(name)
+    return next
+  })
+
+  const panelStyle = { width: `${width}px` }
+  const resizeHandle = jsx('div', {
+    role: 'separator',
+    'aria-label': 'Resize agent activity panel',
+    'aria-orientation': 'vertical',
+    tabIndex: 0,
+    title: 'Drag to resize · Double-click to reset',
+    onPointerDown: beginResize,
+    onDoubleClick: () => persistWidth(240),
+    onKeyDown: event => {
+      if (event.key === 'ArrowLeft') { event.preventDefault(); persistWidth(widthRef.current + 16) }
+      if (event.key === 'ArrowRight') { event.preventDefault(); persistWidth(widthRef.current - 16) }
+    },
+    className: 'absolute inset-y-0 left-0 z-20 w-1.5 -translate-x-1/2 cursor-col-resize bg-transparent transition-colors hover:bg-(--ui-accent) focus:bg-(--ui-accent) focus:outline-none',
+    style: { touchAction: 'none' }
+  })
+
   if (!profile) {
     return jsxs('aside', {
-      className: 'flex w-[286px] shrink-0 flex-col items-center justify-center border-l border-(--ui-stroke-secondary) p-6 text-center',
-      children: [
-        jsx(Codicon, { name: 'organization', className: 'mb-3 text-3xl text-(--ui-text-quaternary)' }),
-        jsx('div', { className: 'text-sm font-medium', children: 'Choose a citizen' }),
-        jsx('p', { className: 'mt-1 text-xs leading-5 text-(--ui-text-tertiary)', children: 'Click a character or workshop to inspect the agent. Double-click to open its latest conversation.' })
-      ]
+      className: 'relative flex h-full min-h-0 shrink-0 flex-col items-center justify-center border-l border-(--ui-stroke-secondary) bg-(--ui-bg-primary) p-5 text-center',
+      style: panelStyle,
+      children: [resizeHandle, jsx(Codicon, { name: 'organization', className: 'mb-3 text-3xl text-(--ui-text-quaternary)' }), jsx('div', { className: 'text-sm font-medium', children: 'Choose a citizen' })]
     })
   }
+
   const meta = OCCUPATION_META[profile.occupation]
   const session = profile.canonical_session || profile.last_session
-  const lastActive = Math.max(timestampMs(profile.canonical_session?.last_active), timestampMs(profile.last_session?.last_active))
   return jsxs('aside', {
-    className: 'flex w-[286px] shrink-0 flex-col border-l border-(--ui-stroke-secondary) bg-(--ui-bg-primary)',
+    className: 'relative flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-l border-(--ui-stroke-secondary) bg-(--ui-bg-primary)',
+    style: panelStyle,
     children: [
+      resizeHandle,
       jsxs('div', {
-        className: 'border-b border-(--ui-stroke-secondary) p-4',
+        className: 'shrink-0 border-b border-(--ui-stroke-secondary) px-3 py-2.5',
         children: [
           jsxs('div', {
-            className: 'flex items-start justify-between gap-3',
+            className: 'flex items-center justify-between gap-2',
             children: [
-              jsxs('div', {
-                className: 'min-w-0',
-                children: [
-                  jsx('div', { className: 'truncate text-base font-semibold', children: profile.display_name || (profile.name === 'default' ? 'Hermes' : profile.name) }),
-                  jsx('div', { className: 'mt-0.5 text-xs text-(--ui-text-tertiary)', children: `@${profile.name}` })
-                ]
-              }),
+              jsxs('div', { className: 'min-w-0', children: [jsx('div', { className: 'truncate text-sm font-semibold', children: profile.display_name || (profile.name === 'default' ? 'Hermes' : profile.name) }), jsx('div', { className: 'truncate text-[0.625rem] text-(--ui-text-quaternary)', children: `@${profile.name} · ${meta.building}` })] }),
               jsx(StatusBadge, { status: profile.status })
             ]
           }),
-          jsx('p', { className: 'mt-3 text-xs leading-5 text-(--ui-text-secondary)', children: profile.description || meta.label }),
-          jsxs('div', {
-            className: 'mt-3 grid grid-cols-2 gap-2 text-[0.6875rem]',
+          jsxs('label', {
+            className: 'mt-2 block',
             children: [
-              jsxs('div', { className: 'rounded border border-(--ui-stroke-secondary) p-2', children: [jsx('div', { className: 'text-(--ui-text-quaternary)', children: 'WORKSHOP' }), jsx('div', { className: 'mt-1 font-medium', children: meta.building })] }),
-              jsxs('div', { className: 'rounded border border-(--ui-stroke-secondary) p-2', children: [jsx('div', { className: 'text-(--ui-text-quaternary)', children: 'LAST SEEN' }), jsx('div', { className: 'mt-1 font-medium', children: relativeTime(lastActive) })] })
+              jsx('span', { className: 'text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-(--ui-text-quaternary)', children: 'Craft / character' }),
+              jsx('select', {
+                value: profile.occupation,
+                onChange: event => { haptic('tap'); onOccupation(profile.name, event.target.value) },
+                className: 'mt-1 h-8 w-full rounded border border-(--ui-stroke-secondary) bg-(--ui-bg-secondary) px-2 text-xs text-(--ui-text-primary) outline-none focus:border-(--ui-accent)',
+                children: OCCUPATIONS.map(occupation => jsx('option', { value: occupation, children: OCCUPATION_META[occupation].label }, occupation))
+              })
             ]
           })
         ]
       }),
       jsxs('div', {
-        className: 'min-h-0 flex-1 overflow-y-auto p-4',
+        className: 'flex min-h-0 flex-1 flex-col',
         children: [
-          jsx('div', { className: 'text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-(--ui-text-quaternary)', children: 'Current craft' }),
-          jsx('div', {
-            className: 'mt-2 grid grid-cols-2 gap-2',
-            children: OCCUPATIONS.map(occupation => jsx('button', {
-              type: 'button',
-              onClick: () => { haptic('tap'); onOccupation(profile.name, occupation) },
-              className: cx(
-                'rounded border px-2 py-2 text-left text-[0.6875rem] transition-colors',
-                occupation === profile.occupation
-                  ? 'border-(--ui-accent) bg-(--ui-bg-tertiary) text-(--ui-accent)'
-                  : 'border-(--ui-stroke-secondary) hover:bg-(--ui-bg-secondary)'
-              ),
-              children: OCCUPATION_META[occupation].label
-            }, occupation))
-          }),
-          profile.activity ? jsxs('div', {
-            className: 'mt-5 rounded border border-(--ui-accent) p-3',
-            children: [
-              jsxs('div', { className: 'flex items-center justify-between gap-2', children: [jsx('div', { className: 'text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-(--ui-accent)', children: profile.activity.phase === 'working' ? 'Live activity' : 'Latest activity' }), profile.activeSessionCount > 1 ? jsx('span', { className: 'text-[0.6875rem] text-(--ui-text-tertiary)', children: `${profile.activeSessionCount} sessions` }) : null] }),
-              jsx('div', { className: 'mt-2 text-xs font-medium', children: `${toolCategoryLabel(profile.activity.category)} · ${String(profile.activity.tool || 'task').replaceAll('_', ' ')}` }),
-              profile.activity.context ? jsx('p', { className: 'mt-1 line-clamp-3 text-[0.6875rem] leading-4 text-(--ui-text-tertiary)', children: profile.activity.context }) : null
-            ]
-          }) : null,
-          jsx('div', { className: 'mt-5 text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-(--ui-text-quaternary)', children: 'Latest scroll' }),
           jsxs('div', {
-            className: 'mt-2 rounded border border-(--ui-stroke-secondary) p-3',
-            children: [
-              jsx('div', { className: 'truncate text-xs font-medium', children: session?.title || 'No conversation yet' }),
-              jsx('p', { className: 'mt-1 line-clamp-4 text-[0.6875rem] leading-4 text-(--ui-text-tertiary)', children: session?.preview || 'This citizen is waiting for a first commission.' })
-            ]
+            className: 'flex shrink-0 items-center justify-between px-3 pb-2 pt-3',
+            children: [jsx('div', { className: 'text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-(--ui-text-secondary)', children: 'Agent actions' }), jsx('div', { className: 'text-[0.625rem] text-(--ui-text-quaternary)', children: 'Expand an agent' })]
           }),
-          profile.activityHistory?.length ? jsxs('div', {
-            className: 'mt-5',
-            children: [
-              jsx('div', { className: 'text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-(--ui-text-quaternary)', children: 'Activity log' }),
-              jsx('div', { className: 'mt-2 space-y-1.5', children: profile.activityHistory.slice(0, 6).map((item, index) => jsxs('div', { className: 'flex items-start gap-2 rounded border border-(--ui-stroke-secondary) px-2 py-1.5 text-[0.6875rem]', children: [jsx(Codicon, { name: item.phase === 'failed' ? 'error' : item.phase === 'waiting' ? 'question' : item.phase === 'complete' ? 'check' : 'sync' }), jsxs('div', { className: 'min-w-0 flex-1', children: [jsx('div', { className: 'truncate font-medium', children: String(item.tool || item.type).replaceAll('_', ' ') }), jsx('div', { className: 'truncate text-(--ui-text-quaternary)', children: `${toolCategoryLabel(item.category)} · ${relativeTime(item.at)}` })] })] }, `${item.at}-${index}`)) })
-            ]
-          }) : null
+          jsx('div', {
+            className: 'min-h-0 flex-1 space-y-2 overflow-y-auto px-2.5 pb-3',
+            children: profiles.map(agent => jsx(AgentActivityCard, { agent, selected: agent.name === profile.name, expanded: expandedAgents.has(agent.name), onSelect, onToggle: toggleAgent }, agent.name))
+          })
         ]
       }),
       jsx('div', {
-        className: 'border-t border-(--ui-stroke-secondary) p-3',
+        className: 'shrink-0 border-t border-(--ui-stroke-secondary) p-2.5',
         children: jsx(Button, {
           className: 'w-full',
           disabled: !session,
@@ -1802,7 +1908,7 @@ function PolisPage() {
       }),
       jsxs('main', {
         className: 'flex min-h-0 flex-1',
-        children: [jsx(PolisCanvas, { profiles, selectedName: selected?.name, onSelect: setSelectedName, onOpen: openByName }), jsx(DetailPanel, { profile: selected, onOccupation: assignOccupation, onOpen: openByName })]
+        children: [jsx(PolisCanvas, { profiles, selectedName: selected?.name, onSelect: setSelectedName, onOpen: openByName }), jsx(DetailPanel, { profiles, profile: selected, onSelect: setSelectedName, onOccupation: assignOccupation, onOpen: openByName })]
       })
     ]
   })
