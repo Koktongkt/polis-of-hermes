@@ -1,0 +1,26 @@
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Generated source sheets and inspection artifacts
+assets/generated-*.png
+assets/character-animation-contact.jpg
+
+# Lossless/intermediate exports; runtime uses WebP
+assets/*.png
+
+# Local tooling and OS files
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+cache/
