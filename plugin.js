@@ -1658,11 +1658,14 @@ function ActivityLogRow({ item }) {
 function AgentActivityCard({ agent, selected, expanded, onSelect, onToggle }) {
   const history = agent.activityHistory || []
   return jsxs('section', {
-    className: cx('border-l-2 transition-colors', selected ? 'border-l-primary' : 'border-l-transparent'),
+    className: cx(
+      'mx-2 mb-2 overflow-hidden rounded-md border bg-(--ui-bg-elevated) transition-colors',
+      selected ? 'border-primary' : 'border-(--ui-stroke-tertiary)'
+    ),
     children: [
       jsxs('button', {
         type: 'button',
-        className: cx('flex w-full items-center gap-2 border-t border-border/50 px-2.5 py-2.5 text-left transition-colors hover:bg-accent/40', selected && 'bg-accent/30'),
+        className: cx('flex w-full items-center gap-2 px-2.5 py-2.5 text-left transition-colors hover:bg-(--ui-control-hover-background)', selected && 'bg-(--ui-row-active-background)'),
         'aria-expanded': expanded,
         onClick: () => { onSelect(agent.name); onToggle(agent.name) },
         children: [
@@ -1678,7 +1681,7 @@ function AgentActivityCard({ agent, selected, expanded, onSelect, onToggle }) {
         ]
       }),
       expanded ? jsxs('div', {
-        className: 'pb-3 pl-8 pr-3',
+        className: 'border-t border-(--ui-stroke-tertiary) bg-(--ui-bg-elevated) pb-3 pl-8 pr-3',
         children: [
           agent.activity ? jsxs('div', {
             className: 'py-2',
@@ -1757,7 +1760,7 @@ function DetailPanel({ profiles, profile, onSelect, onOccupation, onOpen }) {
     return next
   })
 
-  const panelStyle = { width: `${width}px` }
+  const panelStyle = { width: `${width}px`, background: 'var(--ui-chat-surface-background, var(--ui-bg-chrome))' }
   const resizeHandle = jsx('div', {
     role: 'separator',
     'aria-label': 'Resize agent activity panel',
@@ -1776,7 +1779,7 @@ function DetailPanel({ profiles, profile, onSelect, onOccupation, onOpen }) {
 
   if (!profile) {
     return jsxs('aside', {
-      className: 'relative flex h-full min-h-0 shrink-0 flex-col items-center justify-center border-l border-border/50 bg-background p-5 text-center text-foreground',
+      className: 'relative flex h-full min-h-0 shrink-0 flex-col items-center justify-center border-l border-(--ui-stroke-tertiary) p-5 text-center text-(--ui-text-primary)',
       style: panelStyle,
       children: [resizeHandle, jsx(Codicon, { name: 'organization', className: 'mb-3 text-3xl text-(--ui-text-quaternary)' }), jsx('div', { className: 'text-sm font-medium', children: 'Choose a citizen' })]
     })
@@ -1785,7 +1788,7 @@ function DetailPanel({ profiles, profile, onSelect, onOccupation, onOpen }) {
   const meta = OCCUPATION_META[profile.occupation]
   const session = profile.canonical_session || profile.last_session
   return jsxs('aside', {
-    className: 'relative flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-l border-border/50 bg-background text-foreground',
+    className: 'relative flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-l border-(--ui-stroke-tertiary) text-(--ui-text-primary)',
     style: panelStyle,
     children: [
       resizeHandle,
@@ -1807,8 +1810,18 @@ function DetailPanel({ profiles, profile, onSelect, onOccupation, onOpen }) {
                 value: profile.occupation,
                 onValueChange: value => { haptic('tap'); onOccupation(profile.name, value) },
                 children: [
-                  jsx(SelectTrigger, { size: 'sm', 'aria-label': 'Craft or character', children: jsx(SelectValue, {}) }),
-                  jsx(SelectContent, { children: OCCUPATIONS.map(occupation => jsx(SelectItem, { value: occupation, children: OCCUPATION_META[occupation].label }, occupation)) })
+                  jsx(SelectTrigger, {
+                    size: 'sm',
+                    'aria-label': 'Craft or character',
+                    className: 'text-(--ui-text-primary)',
+                    style: { background: 'var(--ui-bg-elevated)', borderColor: 'var(--ui-stroke-secondary)' },
+                    children: jsx(SelectValue, {})
+                  }),
+                  jsx(SelectContent, {
+                    className: 'border-(--ui-stroke-secondary) text-(--ui-text-primary)',
+                    style: { background: 'var(--ui-bg-elevated)', color: 'var(--ui-text-primary)', borderColor: 'var(--ui-stroke-secondary)' },
+                    children: OCCUPATIONS.map(occupation => jsx(SelectItem, { className: 'focus:bg-(--ui-control-hover-background) focus:text-(--ui-text-primary)', value: occupation, children: OCCUPATION_META[occupation].label }, occupation))
+                  })
                 ]
               })
             ]
@@ -1816,7 +1829,7 @@ function DetailPanel({ profiles, profile, onSelect, onOccupation, onOpen }) {
         ]
       }),
       jsxs('div', {
-        className: 'flex min-h-0 flex-1 flex-col border-t border-border/50',
+        className: 'flex min-h-0 flex-1 flex-col border-t border-(--ui-stroke-tertiary)',
         children: [
           jsxs('div', {
             className: 'flex shrink-0 items-center justify-between px-3 py-2',
@@ -1829,7 +1842,7 @@ function DetailPanel({ profiles, profile, onSelect, onOccupation, onOpen }) {
         ]
       }),
       jsx('div', {
-        className: 'shrink-0 border-t border-border/50 px-3 py-2.5',
+        className: 'shrink-0 border-t border-(--ui-stroke-tertiary) px-3 py-2.5',
         children: jsx(Button, {
           className: 'w-full justify-center',
           disabled: !session,
