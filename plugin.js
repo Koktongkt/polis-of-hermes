@@ -1627,11 +1627,19 @@ function drawWorldV4(ctx, canvas, profiles, selectedName, p, t, hitMap, art) {
     g.globalAlpha = profile.status === 'offline' ? .58 : 1
     if (profile.name === selectedName) {
       g.save()
-      g.shadowColor = p.active
-      g.shadowBlur = 24
+
+      // Animated gold glow
+      g.shadowColor = '#FFD54A'
+      g.shadowBlur = 34 + Math.sin(t * 0.006) * 10
       g.shadowOffsetX = 0
       g.shadowOffsetY = 0
+
+      // Make selected sprite visibly brighter
+      g.filter = 'brightness(1.3) saturate(1.35)'
+
+      // Draw once to create the glow
       g.drawImage(image, x, y, w, h)
+
       g.restore()
     }
     g.drawImage(image, x, y, w, h)
@@ -1649,15 +1657,60 @@ function drawWorldV4(ctx, canvas, profiles, selectedName, p, t, hitMap, art) {
   drawPolisTitleV4(g, p)
 
   ctx.clearRect(0, 0, canvas.width, canvas.height)
-  const scale = Math.min(canvas.width / 960, canvas.height / 540)
+  const bgScale = Math.max(
+    canvas.width / 960,
+    canvas.height / 540
+  )
+  const bgW = Math.round(960 * bgScale)
+  const bgH = Math.round(540 * bgScale)
+  const bgX = Math.floor((canvas.width - bgW) / 2)
+  const bgY = Math.floor((canvas.height - bgH) / 2)
+
+  ctx.save()
+  ctx.imageSmoothingEnabled = true
+  ctx.globalAlpha = 0.55
+  ctx.filter = 'blur(18px) brightness(0.55)'
+
+  ctx.drawImage(
+    buffer,
+    bgX,
+    bgY,
+    bgW,
+    bgH
+  )
+  ctx.restore()
+
+  const scale = Math.min(
+    canvas.width / 960,
+    canvas.height / 540
+  )
   const dw = Math.round(960 * scale)
   const dh = Math.round(540 * scale)
   const ox = Math.floor((canvas.width - dw) / 2)
   const oy = Math.floor((canvas.height - dh) / 2)
-  ctx.fillStyle = p.groundDark
-  ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+  ctx.save()
+  ctx.beginPath()
+  ctx.roundRect(
+    ox,
+    oy,
+    dw,
+    dh,
+    8 // corner radius in pixels
+  )
+
+  ctx.clip()
+
   ctx.imageSmoothingEnabled = true
-  ctx.drawImage(buffer, ox, oy, dw, dh)
+  ctx.drawImage(
+    buffer,
+    ox,
+    oy,
+    dw,
+    dh
+  )
+
+  ctx.restore()
   hitMap.current = ordered.map(({ profile, site }) => ({
     name: profile.name,
     x: ox + (site.x * 3 - 135) * scale,
@@ -1727,7 +1780,7 @@ function PolisCanvas({ profiles, selectedName, onSelect, onOpen }) {
 
   return jsx('div', {
     ref: wrapRef,
-    className: 'relative min-h-[360px] min-w-0 flex-1 overflow-hidden',
+    className: 'relative min-h-[360px] min-w-0 flex-1 overflow-hidden rounded-l-xl',
     children: jsx('canvas', {
       ref: canvasRef,
       className: 'block h-full w-full cursor-crosshair',
@@ -2038,7 +2091,7 @@ function PolisPage() {
         ]
       }),
       jsxs('main', {
-        className: 'flex min-h-0 flex-1',
+        className: 'm-3 flex min-h-0 flex-1 overflow-hidden rounded-xl border border-(--ui-stroke-secondary)',
         children: [jsx(PolisCanvas, { profiles, selectedName: selected?.name, onSelect: setSelectedName, onOpen: openByName }), jsx(DetailPanel, { profiles, profile: selected, onSelect: setSelectedName, onOccupation: assignOccupation, onOpen: openByName })]
       })
     ]
