@@ -14,7 +14,7 @@ A living ancient-Greek control surface for [Hermes Desktop](https://github.com/N
 - Pet-style four-frame environment atlas for stepped sky, sea, tree-canopy, and fountain motion
 - Secondary ambience for smoke, sparks, birds, and drifting pollen
 - Silhouette-following selection glow instead of rectangular bounding boxes
-- Continuous sandstone terrace paving replaces the former square occupation pads, with occupation-specific wear, directional cast shadows, reflected floor light, and painter-ordered upper/lower depth
+- Perspective-matched plinths, silhouette-derived contact shadows, foreground floor overlap, and doorway-aligned worn paths that seat each workplace inside its terrace zone
 - Illustrated Mediterranean nameplates and title plaque
 - Clickable citizens, occupation persistence, and Hermes-native conversation opening
 - Compact resizable agent panel with a persisted user-selected width
