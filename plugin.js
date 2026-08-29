@@ -305,6 +305,9 @@ function paletteFor(root) {
     shadow: color('rgba(10, 16, 15, 0.72)'),
     sand: color('#a98a5a'),
     sandLight: color('#c5a66c'),
+    terraceBase: color('#e0bfa3'),
+    terraceLight: color('#efd4b1'),
+    terraceShade: color('#b58f7a'),
     limestone: color('#e6d7ba'),
     limestoneShade: color('#8f7858'),
     roof: color('#9e4936'),
@@ -1320,6 +1323,11 @@ const POLIS_LAYOUTS_V4 = [
   { x: 74, y: 146 }, { x: 246, y: 146 }
 ]
 
+function agentCenterV4(site) {
+  if (site.y < 100) return site.x * 3 + (site.x < 160 ? 160 : -160)
+  return site.x * 3 - 60
+}
+
 function drawCharacterArtV4(ctx, site, profile, selectedName, p, t, art) {
   const occupation = profile.occupation || 'herald'
   const key = `character${occupation.charAt(0).toUpperCase()}${occupation.slice(1)}`
@@ -1339,7 +1347,7 @@ function drawCharacterArtV4(ctx, site, profile, selectedName, p, t, art) {
   const ratio = targetH / frameH
   const w = Math.round(frameW * ratio)
   const h = Math.round(frameH * ratio)
-  const centerX = site.x * 3 - 60
+  const centerX = agentCenterV4(site)
   const baseline = site.y * 3 + 27
   const x = Math.round(centerX - w / 2)
   const y = Math.round(baseline - h)
@@ -1488,6 +1496,89 @@ const BUILDING_INTEGRATION_V4 = {
   scribe: { door: .05, accent: 'water' }
 }
 
+function zoneFloorBoundsV4(site) {
+  const left = site.x < 160
+  return site.y < 100
+    ? { x: left ? 86 : 550, y: 116, w: 324, h: 123 }
+    : { x: left ? 70 : 550, y: 296, w: 340, h: 143 }
+}
+
+function drawTerraceFloorV4(ctx, site, p) {
+  const floor = zoneFloorBoundsV4(site)
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(floor.x, floor.y, floor.w, floor.h)
+  ctx.clip()
+
+  // Replace the four pale square occupation pads with one continuous field of
+  // warm sandstone paving. Staggered seams continue the central terrace rather
+  // than outlining a new square zone.
+  ctx.globalAlpha = .88
+  ctx.fillStyle = p.terraceBase
+  ctx.fillRect(floor.x, floor.y, floor.w, floor.h)
+  ctx.lineWidth = 1
+  for (let row = 0, y = floor.y + 7; y < floor.y + floor.h; row += 1, y += 13) {
+    ctx.globalAlpha = row % 3 === 0 ? .38 : .24
+    ctx.strokeStyle = p.terraceShade
+    ctx.beginPath(); ctx.moveTo(floor.x, y); ctx.lineTo(floor.x + floor.w, y); ctx.stroke()
+    const offset = row % 2 ? 18 : 0
+    const seamStart = Math.floor((floor.x - offset) / 38) * 38 + offset
+    for (let x = seamStart; x < floor.x + floor.w; x += 38) {
+      ctx.beginPath(); ctx.moveTo(x, y - 13); ctx.lineTo(x, y); ctx.stroke()
+    }
+  }
+  ctx.globalAlpha = .24
+  ctx.fillStyle = p.terraceLight
+  for (let i = 0; i < 18; i += 1) {
+    const x = floor.x + 9 + ((i * 47 + site.x * 5) % Math.max(20, floor.w - 18))
+    const y = floor.y + 8 + ((i * 29 + site.y * 3) % Math.max(20, floor.h - 16))
+    ctx.fillRect(Math.round(x), Math.round(y), 6 + (i % 3) * 3, 2)
+  }
+  ctx.restore()
+}
+
+function drawZoneWearV4(ctx, placement, occupation, p) {
+  const meta = BUILDING_INTEGRATION_V4[occupation] || BUILDING_INTEGRATION_V4.herald
+  const doorX = Math.round(placement.x + placement.w * (.5 + meta.door))
+  const y = placement.baseline + 4
+  ctx.save()
+  ctx.lineWidth = 2
+  ctx.globalAlpha = .32
+  if (occupation === 'blacksmith') {
+    ctx.fillStyle = p.groundDark
+    ctx.beginPath(); ctx.ellipse(doorX + 54, y - 4, 35, 9, -.08, 0, Math.PI * 2); ctx.fill()
+    ctx.globalAlpha = .58
+    for (let i = 0; i < 8; i += 1) ctx.fillRect(doorX + 29 + i * 8, y - 10 + (i * 5) % 13, 3, 2)
+  } else if (occupation === 'scholar') {
+    ctx.strokeStyle = p.lapis
+    ;[22, 31, 40].forEach(radius => { ctx.beginPath(); ctx.arc(doorX, y + 5, radius, Math.PI, Math.PI * 2); ctx.stroke() })
+    ctx.fillStyle = p.marble
+    for (let i = -2; i <= 2; i += 1) ctx.fillRect(doorX + i * 13 - 2, y + 1 + Math.abs(i) * 2, 5, 3)
+  } else if (occupation === 'merchant') {
+    ctx.strokeStyle = p.terracotta
+    ctx.beginPath(); ctx.moveTo(doorX - 42, y - 3); ctx.lineTo(doorX - 52, placement.floorFront - 2); ctx.stroke()
+    ctx.beginPath(); ctx.moveTo(doorX + 42, y - 3); ctx.lineTo(doorX + 52, placement.floorFront - 2); ctx.stroke()
+    ctx.fillStyle = p.sand
+    for (let i = -2; i <= 2; i += 1) ctx.fillRect(doorX + i * 18 - 5, y + (i % 2) * 4, 11, 3)
+  } else if (occupation === 'warrior') {
+    ctx.strokeStyle = p.terracotta
+    ;[42, 52].forEach(radius => { ctx.beginPath(); ctx.ellipse(doorX, y + 5, radius, 13, 0, Math.PI, Math.PI * 2); ctx.stroke() })
+    ctx.fillStyle = p.groundDark
+    for (let i = 0; i < 9; i += 1) ctx.fillRect(doorX - 48 + i * 12, y + (i * 7) % 10, 7, 2)
+  } else if (occupation === 'scribe') {
+    ctx.fillStyle = p.lapis
+    ;[[-31, 2, 13, 3], [24, 8, 17, 2], [43, -3, 8, 3]].forEach(([dx, dy, w, h]) => ctx.fillRect(doorX + dx, y + dy, w, h))
+    ctx.fillStyle = p.marble
+    ;[[-47, 7], [37, 11]].forEach(([dx, dy]) => { ctx.fillRect(doorX + dx, y + dy, 9, 6); ctx.fillStyle = p.muted; ctx.fillRect(doorX + dx + 2, y + dy + 2, 5, 1); ctx.fillStyle = p.marble })
+  } else {
+    ctx.strokeStyle = p.gold
+    ctx.beginPath(); ctx.arc(doorX, y + 3, 36, Math.PI, Math.PI * 2); ctx.stroke()
+    ctx.fillStyle = p.gold
+    for (let i = -3; i <= 3; i += 1) ctx.fillRect(doorX + i * 12 - 2, y + Math.abs(i), 4, 4)
+  }
+  ctx.restore()
+}
+
 function buildingPlacementV4(site, image) {
   const maxW = site.y < 100 ? 245 : 255
   const maxH = site.y < 100 ? 205 : 195
@@ -1535,6 +1626,13 @@ function drawZoneFoundationV4(ctx, placement, image, occupation, p) {
   const { x, w, spriteBase, baseline } = placement
   ctx.save()
 
+  // A restrained lower-right cast shadow uses the sprite alpha itself, flattened
+  // onto the terrace plane. It stays subtle enough to read as light, not a bar.
+  const castSourceY = Math.floor(image.height * .46)
+  ctx.globalAlpha = .12
+  ctx.filter = 'brightness(0)'
+  ctx.drawImage(image, 0, castSourceY, image.width, image.height - castSourceY, x + 12, spriteBase + 2, w, 20)
+
   // Derive the contact shadow from the sprite's lowest alpha-bearing pixels.
   // This follows columns, steps and wall corners instead of forming an ellipse.
   const sourceY = Math.floor(image.height * .76)
@@ -1567,6 +1665,19 @@ function drawZoneFoundationV4(ctx, placement, image, occupation, p) {
   ctx.globalAlpha = .74
   ctx.fillStyle = accent
   ctx.fillRect(x + 14, spriteBase + 1, Math.max(20, w - 28), 2)
+  ctx.restore()
+}
+
+function drawFloorBounceV4(ctx, placement, image) {
+  const { x, y, w, h, spriteBase } = placement
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(x, spriteBase - 18, w, 18)
+  ctx.clip()
+  ctx.globalCompositeOperation = 'screen'
+  ctx.globalAlpha = .1
+  ctx.filter = 'brightness(1.18) saturate(.72) sepia(.16)'
+  ctx.drawImage(image, x, y, w, h)
   ctx.restore()
 }
 
@@ -1661,7 +1772,7 @@ function drawZonePropsV4(ctx, site, occupation, p, t) {
 function drawNameplateV4(ctx, site, profile, p) {
   const name = profile.display_name || (profile.name === 'default' ? 'Hermes' : profile.name)
   const detail = profile.activity?.phase === 'working' ? toolCategoryLabel(profile.activity.category) : activityLabel(profile.status)
-  const x = site.x * 3 - 60
+  const x = agentCenterV4(site)
   const y = site.y * 3 + 41
   const width = Math.max(104, Math.min(148, name.length * 8 + 30))
   ctx.save()
@@ -1727,8 +1838,16 @@ function drawWorldV4(ctx, canvas, profiles, selectedName, p, t, hitMap, art) {
     const image = art[profile.occupation] || art.herald
     return { profile, site, image, placement: buildingPlacementV4(site, image) }
   })
-  ordered.forEach(({ profile, placement }) => drawApproachPathV4(g, placement, profile.occupation, p))
-  ordered.forEach(({ profile, site, image, placement }) => {
+
+  // Floor work is rendered for every zone first, then agents are painted one
+  // terrace row at a time. This preserves true back-to-front scene depth.
+  POLIS_LAYOUTS_V4.forEach(site => drawTerraceFloorV4(g, site, p))
+  ordered.forEach(({ profile, placement }) => {
+    drawZoneWearV4(g, placement, profile.occupation, p)
+    drawApproachPathV4(g, placement, profile.occupation, p)
+  })
+
+  const drawBuildingEntry = ({ profile, site, image, placement }) => {
     const { x, y, w, h } = placement
     drawZoneFoundationV4(g, placement, image, profile.occupation, p)
     g.globalAlpha = profile.status === 'offline' ? .58 : 1
@@ -1751,17 +1870,24 @@ function drawWorldV4(ctx, canvas, profiles, selectedName, p, t, hitMap, art) {
     }
     g.drawImage(image, x, y, w, h)
     g.globalAlpha = 1
+    drawFloorBounceV4(g, placement, image)
     drawZoneForegroundV4(g, placement, profile.occupation, p)
     drawZonePropsV4(g, site, profile.occupation, p, t)
-  })
-  drawAmbientFrontV4(g, t)
-  ordered.forEach(({ profile, site }) => drawCharacterArtV4(g, site, profile, selectedName, p, t, art))
+  }
 
-  g.save()
-  g.scale(3, 3)
-  ordered.forEach(({ profile, site }) => activityV3(g, site, profile, p, t))
-  g.restore()
-  ordered.forEach(({ profile, site }) => drawNameplateV4(g, site, profile, p))
+  const drawAgentRow = entries => {
+    entries.forEach(drawBuildingEntry)
+    entries.forEach(({ profile, site }) => drawCharacterArtV4(g, site, profile, selectedName, p, t, art))
+    g.save()
+    g.scale(3, 3)
+    entries.forEach(({ profile, site }) => activityV3(g, site, profile, p, t))
+    g.restore()
+    entries.forEach(({ profile, site }) => drawNameplateV4(g, site, profile, p))
+  }
+
+  drawAgentRow(ordered.filter(({ site }) => site.y < 100))
+  drawAgentRow(ordered.filter(({ site }) => site.y >= 100))
+  drawAmbientFrontV4(g, t)
   drawPolisTitleV4(g, p)
 
   ctx.clearRect(0, 0, canvas.width, canvas.height)
