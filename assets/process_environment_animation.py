@@ -9,7 +9,7 @@ changes rather than a single-image CSS/canvas transform.
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 from scipy.ndimage import distance_transform_edt
 
 ROOT = Path(__file__).resolve().parent
@@ -80,41 +80,37 @@ def main() -> None:
     side_groves = ((xx < 155) | (xx > 805)) & (yy < 505)
     foliage_mask = side_groves & (g > 52) & (g > r * 1.03) & (g > b * .82) & ((g - np.minimum(r, b)) > 12)
 
-    # Fountain water is split into jet and basin so the jet lifts while the
-    # basin ripples sideways.
-    fountain_box = (xx > 405) & (xx < 555) & (yy > 225) & (yy < 325)
+    # Fountain masonry, floor tiles, rails, and blue decorative plaques are all
+    # deliberately excluded from masking. The approved fountain stays anchored;
+    # only new water strokes are added per frame below.
     water_color = (b > 115) & (b > r * 1.08) & (g > r * 1.03)
-    fountain_mask = fountain_box & water_color
-    fountain_jet = fountain_mask & (yy < 281)
-    fountain_basin = fountain_mask & ~fountain_jet
+    sea_water = (yy >= 86) & (yy <= 140) & water_color
 
-    removable = cloud_mask | foliage_mask | fountain_mask
+    removable = cloud_mask | foliage_mask
     static_rgb = nearest_fill(rgb, removable)
     static = np.dstack([static_rgb, np.full((FRAME_H, FRAME_W), 255, dtype=np.uint8)])
 
     cloud_layer = alpha_layer(rgb, cloud_mask)
     foliage_layer = alpha_layer(rgb, foliage_mask)
-    jet_layer = alpha_layer(rgb, fountain_jet)
-    basin_layer = alpha_layer(rgb, fountain_basin)
 
     frames = []
     cloud_steps = (0, 3, 6, 3)
     canopy_steps = (0, 1, 2, 1)
-    jet_steps = (0, -2, -4, -2)
     phases = (0.0, np.pi / 2, np.pi, 3 * np.pi / 2)
 
     for frame_index, phase in enumerate(phases):
         frame = static.copy()
 
-        # Aegean water: real stepped frame changes made from the original sea
-        # texture, with independently moving scanline bands and glint pulses.
-        sea = source[82:151].copy()
-        for row in range(sea.shape[0]):
-            shift = int(round(np.sin(row * .31 + phase) * 3 + np.sin(row * .09 - phase) * 2))
-            sea[row] = np.roll(sea[row], shift, axis=0)
-            if (row + frame_index * 5) % 13 == 0:
-                sea[row, :, :3] = np.clip(sea[row, :, :3].astype(np.int16) + 5, 0, 255)
-        frame[82:151] = sea
+        # Aegean water: keep every horizon, terrace, floor and rail pixel fixed.
+        # Only small highlights inside pixels already classified as sea water
+        # change from frame to frame.
+        for band in range(9):
+            y = 91 + ((band * 7 + frame_index * 3) % 45)
+            x0 = (band * 109 + frame_index * 17) % 930
+            length = 9 + (band % 4) * 4
+            for x in range(x0, min(960, x0 + length)):
+                if sea_water[y, x]:
+                    frame[y, x, :3] = np.clip(frame[y, x, :3].astype(np.int16) + (16, 20, 17), 0, 255)
 
         frame = over(frame, shift_xy(cloud_layer, dx=cloud_steps[frame_index]))
 
@@ -125,13 +121,35 @@ def main() -> None:
         ])
         frame = over(frame, shift_rows(foliage_layer, canopy_rows))
 
-        frame = over(frame, shift_xy(jet_layer, dx=(frame_index % 2), dy=jet_steps[frame_index]))
-        basin_rows = np.array([
-            int(round(np.sin(y * .55 + phase) * 2)) if 260 <= y <= 325 else 0
-            for y in range(FRAME_H)
-        ])
-        frame = over(frame, shift_rows(basin_layer, basin_rows))
-        frames.append(Image.fromarray(frame, "RGBA"))
+        # Fixed-nozzle fountain cycle. The fountain and surrounding terrace are
+        # copied unchanged from the source; only new stream branches, droplets,
+        # and basin glints vary. Nothing is translated vertically.
+        frame_image = Image.fromarray(frame, "RGBA")
+        draw = ImageDraw.Draw(frame_image)
+        bright = (218, 255, 249, 235)
+        cyan = (111, 222, 232, 225)
+        spurt_lines = (
+            [((480, 268), (480, 247))],
+            [((480, 268), (472, 251)), ((481, 268), (490, 250))],
+            [((479, 268), (463, 255)), ((481, 268), (499, 254)), ((480, 266), (480, 246))],
+            [((480, 268), (470, 250)), ((481, 268), (492, 251))],
+        )[frame_index]
+        droplets = (
+            [(478, 243), (486, 250)],
+            [(468, 247), (493, 246), (481, 241)],
+            [(458, 253), (503, 252), (475, 243), (487, 244)],
+            [(466, 248), (496, 249), (482, 243)],
+        )[frame_index]
+        for start, end in spurt_lines:
+            draw.line((start, end), fill=cyan, width=2)
+            draw.point(end, fill=bright)
+        for x, y in droplets:
+            draw.rectangle((x, y, x + 2, y + 2), fill=bright)
+        ripple_y = 280 + (frame_index % 2) * 4
+        ripple_x = 456 + frame_index * 7
+        draw.line((ripple_x, ripple_y, ripple_x + 16, ripple_y), fill=cyan, width=2)
+        frame = np.asarray(frame_image, dtype=np.uint8).copy()
+        frames.append(frame_image)
 
     atlas = Image.new("RGBA", (FRAME_W * FRAME_COUNT, FRAME_H))
     for index, frame in enumerate(frames):

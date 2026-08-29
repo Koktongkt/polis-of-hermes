@@ -1281,7 +1281,7 @@ function loadPolisArtV4() {
     const filePath = name => `${root}\\polis-of-hermes\\assets\\${name}`
     const files = {
       background: 'polis-terraces.webp',
-      environment: 'environment-animation.webp',
+      environment: 'environment-animation.webp', // v2: fixed terrace geometry, fixed-nozzle fountain spurts
       herald: 'building-herald.webp',
       blacksmith: 'building-blacksmith.webp',
       scholar: 'building-scholar.webp',
