@@ -11,7 +11,11 @@ A living ancient-Greek control surface for [Hermes Desktop](https://github.com/N
 - Occupation-specific idle, working, and waiting loops
 - Live gateway-driven working, waiting, completion, failure, recent, idle, and offline states
 - Concurrent-session activity cues and one-hour activity history
-- Calm environmental animation: sea currents, clouds, fountain water, smoke, particles, and slight asynchronous tree-canopy sway
+- Pet-style four-frame environment atlas for stepped sky, sea, tree-canopy, and fountain motion
+- Secondary ambience for smoke, sparks, birds, and drifting pollen
+- Silhouette-following selection glow instead of rectangular bounding boxes
+- Occupation-specific foundations and props that visually ground each workplace in its zone
+- Illustrated Mediterranean nameplates and title plaque
 - Clickable citizens, occupation persistence, and Hermes-native conversation opening
 - Compact resizable agent panel with a persisted user-selected width
 - Expandable per-agent action cards with live status and one-hour activity logs
@@ -44,11 +48,13 @@ No package installation or build step is required. The plugin is plain JavaScrip
 polis-of-hermes/
 ├── plugin.js                  # Plugin UI, state model, and canvas renderer
 └── assets/
-    ├── polis-terraces.webp    # Polis environment
-    ├── building-*.webp        # Occupation workplaces
-    ├── character-*.webp       # Base occupation portraits
+    ├── polis-terraces.webp       # Approved static environment source
+    ├── environment-animation.webp # Four-frame 960×540 environment atlas
+    ├── building-*.webp           # Occupation workplaces
+    ├── character-*.webp          # Base occupation portraits
     ├── character-animation-*.webp
     ├── process_art.py
+    ├── process_environment_animation.py
     └── process_character_animations.py
 ```
 
@@ -76,7 +82,11 @@ node --check plugin.js
 
 After editing, Hermes Desktop normally hot-reloads the plugin. If it does not, run **Reload desktop plugins** from the command palette.
 
-The processing utilities require Python and Pillow and are development-only. Their source-image paths should be adjusted before regeneration.
+The processing utilities require Python, Pillow, NumPy, and SciPy and are development-only. Their source-image paths should be adjusted before regeneration.
+
+## Environment animation model
+
+The environment uses a 4×1 atlas of complete 960×540 frames. The processor isolates clouds, sea texture, peripheral foliage, and fountain water from the approved illustration, fills the vacated pixels, then recomposites those regions at four stepped poses. The renderer clips one frame at a time using the same fixed-frame approach as Hermes Pets. Architecture, paths, tree trunks, and the fountain stonework remain anchored.
 
 ## Artwork and provenance
 

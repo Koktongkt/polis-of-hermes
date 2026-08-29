@@ -1281,6 +1281,7 @@ function loadPolisArtV4() {
     const filePath = name => `${root}\\polis-of-hermes\\assets\\${name}`
     const files = {
       background: 'polis-terraces.webp',
+      environment: 'environment-animation.webp',
       herald: 'building-herald.webp',
       blacksmith: 'building-blacksmith.webp',
       scholar: 'building-scholar.webp',
@@ -1351,6 +1352,15 @@ function drawCharacterArtV4(ctx, site, profile, selectedName, p, t, art) {
   ctx.fill()
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
+  if (profile.name === selectedName) {
+    ctx.save()
+    ctx.shadowColor = p.active
+    ctx.shadowBlur = 18
+    ctx.shadowOffsetX = 0
+    ctx.shadowOffsetY = 0
+    ctx.drawImage(image, sx, sy, frameW, frameH, x, y, w, h)
+    ctx.restore()
+  }
   ctx.drawImage(image, sx, sy, frameW, frameH, x, y, w, h)
   ctx.globalAlpha = 1
   const statusColor = profile.status === 'working' ? p.active : profile.status === 'waiting' ? p.gold : profile.status === 'failed' ? p.red : p.oliveLight
@@ -1358,11 +1368,6 @@ function drawCharacterArtV4(ctx, site, profile, selectedName, p, t, art) {
   ctx.fillRect(x - 3, y - 3, 10, 10)
   ctx.fillStyle = statusColor
   ctx.fillRect(x, y, 4, 4)
-  if (profile.name === selectedName) {
-    ctx.strokeStyle = p.active
-    ctx.lineWidth = 2
-    ctx.strokeRect(x - 4, y - 4, w + 8, h + 8)
-  }
   ctx.restore()
 }
 
@@ -1438,25 +1443,9 @@ function drawAmbientFrontV4(ctx, t) {
   const s = t * .001
   ctx.save()
 
-  // Fountain rings, droplets and constantly changing specular highlights.
-  const fx = 480
-  const fy = 278
-  for (let i = 0; i < 3; i += 1) {
-    const phase = (s * .48 + i * .34) % 1
-    ctx.strokeStyle = `rgba(187, 247, 246, ${(1 - phase) * .34})`
-    ctx.lineWidth = 2
-    ctx.beginPath()
-    ctx.ellipse(fx, fy + 8, 17 + phase * 31, 5 + phase * 8, 0, 0, Math.PI * 2)
-    ctx.stroke()
-  }
-  for (let i = 0; i < 5; i += 1) {
-    const phase = (s * .7 + i * .2) % 1
-    const dx = Math.sin(i * 2.4) * (7 + phase * 8)
-    ctx.fillStyle = `rgba(220, 255, 249, ${1 - phase})`
-    ctx.fillRect(Math.round(fx + dx), Math.round(fy - 29 + phase * 34), 2, 3)
-  }
-
-  // Chimney smoke, warm brazier sparks, banners, birds and pollen.
+  // Secondary ambience stays procedural; the major sky, sea, tree and fountain
+  // motion comes from the four-frame environment atlas above.
+  // Chimney smoke, warm brazier sparks, birds and pollen.
   ;[[255, 205], [705, 209]].forEach(([x, y], i) => {
     for (let puff = 0; puff < 4; puff += 1) {
       const phase = (s * .09 + puff * .23 + i * .17) % 1
@@ -1487,6 +1476,126 @@ function drawAmbientFrontV4(ctx, t) {
   ctx.restore()
 }
 
+function drawZoneFoundationV4(ctx, site, occupation, p, t) {
+  const cx = site.x * 3
+  const baseline = site.y * 3 + (site.y < 100 ? 12 : 2)
+  const accents = {
+    herald: p.gold,
+    blacksmith: p.terracotta,
+    scholar: p.lapis,
+    merchant: p.oliveLight,
+    warrior: p.roof,
+    scribe: p.water
+  }
+  const accent = accents[occupation] || p.bronze
+  ctx.save()
+  const shadow = ctx.createRadialGradient(cx, baseline - 2, 8, cx, baseline - 2, 105)
+  shadow.addColorStop(0, 'rgba(25, 28, 38, .34)')
+  shadow.addColorStop(1, 'rgba(25, 28, 38, 0)')
+  ctx.fillStyle = shadow
+  ctx.beginPath()
+  ctx.ellipse(cx, baseline - 1, 112, 17, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.globalAlpha = .46
+  ctx.fillStyle = accent
+  ctx.fillRect(cx - 54, baseline - 4, 108, 5)
+  ctx.globalAlpha = .8
+  for (let i = -4; i <= 4; i += 1) {
+    if ((i + occupation.length) % 2 === 0) ctx.fillRect(cx + i * 11 - 3, baseline + 2, 6, 3)
+  }
+  ctx.globalAlpha = 1
+  ctx.restore()
+}
+
+function drawZonePropsV4(ctx, site, occupation, p, t) {
+  const cx = site.x * 3
+  const baseline = site.y * 3 + (site.y < 100 ? 12 : 2)
+  const pulse = Math.floor(t / 330) % 2
+  ctx.save()
+  ctx.lineWidth = 2
+  if (occupation === 'blacksmith') {
+    ctx.fillStyle = 'rgba(46, 36, 34, .38)'
+    ctx.beginPath(); ctx.ellipse(cx + 70, baseline - 2, 25, 7, 0, 0, Math.PI * 2); ctx.fill()
+    ctx.fillStyle = p.active
+    ctx.fillRect(cx + 62 + pulse * 5, baseline - 13 - pulse * 3, 3, 3)
+    ctx.fillRect(cx + 77 - pulse * 4, baseline - 9 - pulse * 5, 2, 2)
+  } else if (occupation === 'merchant') {
+    ;[-1, 1].forEach((side, index) => {
+      ctx.fillStyle = index ? p.terracotta : p.bronze
+      ctx.fillRect(cx + side * 74 - 7, baseline - 14, 14, 12)
+      ctx.fillStyle = p.marble
+      ctx.fillRect(cx + side * 74 - 4, baseline - 17, 8, 4)
+    })
+  } else if (occupation === 'scholar') {
+    ctx.strokeStyle = p.lapis
+    ctx.globalAlpha = .72
+    ctx.beginPath(); ctx.arc(cx, baseline + 1, 25, Math.PI, Math.PI * 2); ctx.stroke()
+    ctx.beginPath(); ctx.arc(cx, baseline + 1, 16, Math.PI, Math.PI * 2); ctx.stroke()
+  } else if (occupation === 'herald') {
+    ctx.fillStyle = p.gold
+    for (let i = -2; i <= 2; i += 1) ctx.fillRect(cx + i * 13 - 2, baseline + Math.abs(i) * 2, 5, 5)
+  } else if (occupation === 'warrior') {
+    ctx.strokeStyle = p.terracotta
+    ctx.globalAlpha = .7
+    ctx.beginPath(); ctx.ellipse(cx, baseline, 48, 11, 0, 0, Math.PI * 2); ctx.stroke()
+    ctx.fillStyle = p.bronze
+    ctx.fillRect(cx + 55, baseline - 21, 4, 20)
+  } else if (occupation === 'scribe') {
+    ctx.fillStyle = p.water
+    ctx.globalAlpha = .72
+    for (let i = -2; i <= 2; i += 1) ctx.fillRect(cx + i * 12 - 4, baseline, 8, 4)
+  }
+  ctx.restore()
+}
+
+function drawNameplateV4(ctx, site, profile, p) {
+  const name = profile.display_name || (profile.name === 'default' ? 'Hermes' : profile.name)
+  const detail = profile.activity?.phase === 'working' ? toolCategoryLabel(profile.activity.category) : activityLabel(profile.status)
+  const x = site.x * 3 - 60
+  const y = site.y * 3 + 41
+  const width = Math.max(104, Math.min(148, name.length * 8 + 30))
+  ctx.save()
+  ctx.fillStyle = 'rgba(24, 35, 55, .88)'
+  ctx.strokeStyle = profile.status === 'working' ? p.active : p.bronze
+  ctx.lineWidth = 1.5
+  ctx.beginPath()
+  ctx.roundRect(x - width / 2, y, width, 32, 5)
+  ctx.fill(); ctx.stroke()
+  ctx.fillStyle = p.gold
+  ctx.fillRect(x - width / 2 + 8, y + 5, 3, 3)
+  ctx.fillRect(x + width / 2 - 11, y + 5, 3, 3)
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = p.marble
+  ctx.font = '700 12px Georgia, Cambria, serif'
+  ctx.fillText(name, x, y + 11)
+  ctx.fillStyle = ['working', 'waiting', 'failed'].includes(profile.status) ? p.active : p.muted
+  ctx.font = '600 9px Georgia, Cambria, serif'
+  ctx.fillText(String(detail).toUpperCase(), x, y + 23)
+  ctx.restore()
+}
+
+function drawPolisTitleV4(ctx, p) {
+  const x = 480
+  const y = 13
+  ctx.save()
+  ctx.fillStyle = 'rgba(24, 35, 55, .84)'
+  ctx.strokeStyle = p.bronze
+  ctx.lineWidth = 1.5
+  ctx.beginPath(); ctx.roundRect(x - 147, y, 294, 49, 7); ctx.fill(); ctx.stroke()
+  ctx.fillStyle = p.gold
+  ctx.beginPath(); ctx.moveTo(x - 132, y + 24); ctx.lineTo(x - 126, y + 18); ctx.lineTo(x - 120, y + 24); ctx.lineTo(x - 126, y + 30); ctx.closePath(); ctx.fill()
+  ctx.beginPath(); ctx.moveTo(x + 132, y + 24); ctx.lineTo(x + 126, y + 18); ctx.lineTo(x + 120, y + 24); ctx.lineTo(x + 126, y + 30); ctx.closePath(); ctx.fill()
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillStyle = p.marble
+  ctx.font = '700 17px Georgia, Cambria, serif'
+  ctx.fillText('THE POLIS OF HERMES', x, y + 19)
+  ctx.fillStyle = p.gold
+  ctx.font = '600 9px Georgia, Cambria, serif'
+  ctx.fillText('A CITY OF MINDS AND CRAFT', x, y + 37)
+  ctx.restore()
+}
+
 function drawWorldV4(ctx, canvas, profiles, selectedName, p, t, hitMap, art) {
   const buffer = canvas.__polisArtBuffer || (canvas.__polisArtBuffer = document.createElement('canvas'))
   if (buffer.width !== 960) buffer.width = 960
@@ -1494,10 +1603,17 @@ function drawWorldV4(ctx, canvas, profiles, selectedName, p, t, hitMap, art) {
   const g = buffer.getContext('2d')
   g.imageSmoothingEnabled = true
   g.clearRect(0, 0, 960, 540)
-  g.drawImage(art.background, 0, 0, 960, 540)
-  drawAmbientBackV4(g, t)
+  const environment = art.environment || art.background
+  if (art.environment) {
+    const environmentFrame = Math.floor(t / 780) % 4
+    g.drawImage(environment, environmentFrame * 960, 0, 960, 540, 0, 0, 960, 540)
+  } else {
+    g.drawImage(environment, 0, 0, 960, 540)
+    drawAmbientBackV4(g, t)
+  }
 
   const ordered = profiles.slice(0, 4).map((profile, index) => ({ profile, site: POLIS_LAYOUTS_V4[index] }))
+  ordered.forEach(({ profile, site }) => drawZoneFoundationV4(g, site, profile.occupation, p, t))
   ordered.forEach(({ profile, site }) => {
     const image = art[profile.occupation] || art.herald
     const maxW = site.y < 100 ? 245 : 255
@@ -1509,29 +1625,28 @@ function drawWorldV4(ctx, canvas, profiles, selectedName, p, t, hitMap, art) {
     const baseline = site.y * 3 + (site.y < 100 ? 12 : 2)
     const y = baseline - h
     g.globalAlpha = profile.status === 'offline' ? .58 : 1
+    if (profile.name === selectedName) {
+      g.save()
+      g.shadowColor = p.active
+      g.shadowBlur = 24
+      g.shadowOffsetX = 0
+      g.shadowOffsetY = 0
+      g.drawImage(image, x, y, w, h)
+      g.restore()
+    }
     g.drawImage(image, x, y, w, h)
     g.globalAlpha = 1
-    if (profile.name === selectedName) {
-      g.strokeStyle = p.active
-      g.lineWidth = 3
-      g.setLineDash([9, 6])
-      g.strokeRect(x - 5, y - 5, w + 10, h + 12)
-      g.setLineDash([])
-    }
+    drawZonePropsV4(g, site, profile.occupation, p, t)
   })
   drawAmbientFrontV4(g, t)
   ordered.forEach(({ profile, site }) => drawCharacterArtV4(g, site, profile, selectedName, p, t, art))
 
   g.save()
   g.scale(3, 3)
-  ordered.forEach(({ profile, site }) => {
-    activityV3(g, site, profile, p, t)
-    labelV3(g, site, profile, p)
-  })
-  outlineRectV3(g, 91, 4, 138, 20, p.dark, p.bronze)
-  textV3(g, 'THE POLIS OF HERMES', 160, 11, p.text, 8)
-  textV3(g, 'A CITY OF MINDS AND CRAFT', 160, 19, p.muted, 4.5)
+  ordered.forEach(({ profile, site }) => activityV3(g, site, profile, p, t))
   g.restore()
+  ordered.forEach(({ profile, site }) => drawNameplateV4(g, site, profile, p))
+  drawPolisTitleV4(g, p)
 
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   const scale = Math.min(canvas.width / 960, canvas.height / 540)
