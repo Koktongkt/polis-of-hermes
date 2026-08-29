@@ -1476,34 +1476,144 @@ function drawAmbientFrontV4(ctx, t) {
   ctx.restore()
 }
 
-function drawZoneFoundationV4(ctx, site, occupation, p, t) {
-  const cx = site.x * 3
-  const baseline = site.y * 3 + (site.y < 100 ? 12 : 2)
-  const accents = {
-    herald: p.gold,
-    blacksmith: p.terracotta,
-    scholar: p.lapis,
-    merchant: p.oliveLight,
-    warrior: p.roof,
-    scribe: p.water
-  }
-  const accent = accents[occupation] || p.bronze
+// Shared 2.5D construction guide for all workplaces. The terrace faces the
+// viewer (+Y), sunlight comes from the upper left, and every sprite is set
+// slightly behind the front paving edge so the floor can continue around it.
+const BUILDING_INTEGRATION_V4 = {
+  herald: { door: .04, accent: 'gold' },
+  blacksmith: { door: -.29, accent: 'terracotta' },
+  scholar: { door: -.08, accent: 'lapis' },
+  merchant: { door: 0, accent: 'foliageLight' },
+  warrior: { door: 0, accent: 'roof' },
+  scribe: { door: .05, accent: 'water' }
+}
+
+function buildingPlacementV4(site, image) {
+  const maxW = site.y < 100 ? 245 : 255
+  const maxH = site.y < 100 ? 205 : 195
+  const ratio = Math.min(maxW / image.width, maxH / image.height)
+  const w = Math.round(image.width * ratio)
+  const h = Math.round(image.height * ratio)
+  const floorFront = site.y < 100 ? 243 : 440
+  const baseline = floorFront - 12
+  const foundationDepth = 8
+  const x = site.x * 3 - Math.round(w / 2)
+  const spriteBase = baseline - foundationDepth
+  return { x, y: spriteBase - h, w, h, baseline, floorFront, spriteBase }
+}
+
+function drawApproachPathV4(ctx, placement, occupation, p) {
+  const meta = BUILDING_INTEGRATION_V4[occupation] || BUILDING_INTEGRATION_V4.herald
+  const doorX = placement.x + placement.w * (.5 + meta.door)
+  const backY = placement.spriteBase - 1
+  const frontY = placement.floorFront - 1
   ctx.save()
-  const shadow = ctx.createRadialGradient(cx, baseline - 2, 8, cx, baseline - 2, 105)
-  shadow.addColorStop(0, 'rgba(25, 28, 38, .34)')
-  shadow.addColorStop(1, 'rgba(25, 28, 38, 0)')
-  ctx.fillStyle = shadow
+  ctx.globalAlpha = .48
+  ctx.fillStyle = p.sandLight
   ctx.beginPath()
-  ctx.ellipse(cx, baseline - 1, 112, 17, 0, 0, Math.PI * 2)
+  ctx.moveTo(doorX - 8, backY)
+  ctx.lineTo(doorX + 8, backY)
+  ctx.lineTo(doorX + 18, frontY)
+  ctx.lineTo(doorX - 18, frontY)
+  ctx.closePath()
   ctx.fill()
-  ctx.globalAlpha = .46
-  ctx.fillStyle = accent
-  ctx.fillRect(cx - 54, baseline - 4, 108, 5)
-  ctx.globalAlpha = .8
-  for (let i = -4; i <= 4; i += 1) {
-    if ((i + occupation.length) % 2 === 0) ctx.fillRect(cx + i * 11 - 3, baseline + 2, 6, 3)
+  ctx.globalAlpha = .6
+  ctx.strokeStyle = p.limestoneShade
+  ctx.lineWidth = 1
+  for (let y = placement.baseline + 3; y <= frontY; y += 7) {
+    const spread = 10 + (y - placement.baseline) * .38
+    ctx.beginPath(); ctx.moveTo(doorX - spread, y); ctx.lineTo(doorX + spread, y); ctx.stroke()
   }
+  ctx.globalAlpha = .35
+  ctx.beginPath(); ctx.moveTo(doorX, backY + 2); ctx.lineTo(doorX - 2, frontY); ctx.stroke()
+  ctx.restore()
+}
+
+function drawZoneFoundationV4(ctx, placement, image, occupation, p) {
+  const meta = BUILDING_INTEGRATION_V4[occupation] || BUILDING_INTEGRATION_V4.herald
+  const accent = p[meta.accent] || p.bronze
+  const { x, w, spriteBase, baseline } = placement
+  ctx.save()
+
+  // Derive the contact shadow from the sprite's lowest alpha-bearing pixels.
+  // This follows columns, steps and wall corners instead of forming an ellipse.
+  const sourceY = Math.floor(image.height * .76)
+  const sourceH = Math.max(1, image.height - sourceY)
+  ctx.globalAlpha = .3
+  ctx.filter = 'brightness(0)'
+  ctx.drawImage(image, 0, sourceY, image.width, sourceH, x + 5, spriteBase - 2, w, 11)
+  ctx.filter = 'none'
+
+  // A shallow perspective-matched top plane physically receives the building.
   ctx.globalAlpha = 1
+  ctx.fillStyle = p.limestone
+  ctx.beginPath()
+  ctx.moveTo(x + 8, spriteBase - 4)
+  ctx.lineTo(x + w - 8, spriteBase - 4)
+  ctx.lineTo(x + w + 2, spriteBase + 2)
+  ctx.lineTo(x - 2, spriteBase + 2)
+  ctx.closePath()
+  ctx.fill()
+  ctx.strokeStyle = p.limestoneShade
+  ctx.lineWidth = 2
+  ctx.stroke()
+
+  // A narrow lower-right grounding edge establishes the shared light direction
+  // without turning the whole foundation into a dark geometric platform.
+  ctx.globalAlpha = .2
+  ctx.fillStyle = p.groundDark
+  ctx.fillRect(x + 14, spriteBase + 2, Math.max(18, w - 28), 3)
+
+  ctx.globalAlpha = .74
+  ctx.fillStyle = accent
+  ctx.fillRect(x + 14, spriteBase + 1, Math.max(20, w - 28), 2)
+  ctx.restore()
+}
+
+function drawZoneForegroundV4(ctx, placement, occupation, p) {
+  const meta = BUILDING_INTEGRATION_V4[occupation] || BUILDING_INTEGRATION_V4.herald
+  const accent = p[meta.accent] || p.bronze
+  const doorX = Math.round(placement.x + placement.w * (.5 + meta.door))
+  const { x, w, spriteBase, baseline } = placement
+  ctx.save()
+
+  // The front plinth face overlaps the sprite by two pixels: that occlusion is
+  // the cue that the building is seated inside, rather than pasted over, the floor.
+  ctx.fillStyle = p.marbleShade
+  ctx.beginPath()
+  ctx.moveTo(x + 4, spriteBase - 1)
+  ctx.lineTo(x + w - 4, spriteBase - 1)
+  ctx.lineTo(x + w - 9, baseline)
+  ctx.lineTo(x + 9, baseline)
+  ctx.closePath()
+  ctx.fill()
+  ctx.fillStyle = p.marble
+  ctx.fillRect(x + 9, spriteBase - 2, Math.max(16, w - 18), 3)
+  ctx.fillStyle = p.limestoneShade
+  ctx.fillRect(x + 11, baseline - 2, Math.max(14, w - 22), 2)
+
+  // Three widening treads connect the illustrated doorway to the approach path.
+  ;[
+    { width: 18, y: spriteBase - 1 },
+    { width: 27, y: spriteBase + 2 },
+    { width: 36, y: spriteBase + 5 }
+  ].forEach((step, index) => {
+    ctx.fillStyle = index === 1 ? p.marbleShade : p.marble
+    ctx.fillRect(Math.round(doorX - step.width / 2), step.y, step.width, 3)
+    ctx.fillStyle = p.limestoneShade
+    ctx.fillRect(Math.round(doorX - step.width / 2), step.y + 2, step.width, 1)
+  })
+
+  // Broken foreground paving crosses the foundation edge instead of framing it.
+  ctx.globalAlpha = .74
+  ctx.fillStyle = p.groundLight
+  for (let i = 0; i < 7; i += 1) {
+    const stoneX = x + 12 + i * Math.max(12, (w - 30) / 7)
+    if (Math.abs(stoneX - doorX) > 24) ctx.fillRect(Math.round(stoneX), baseline - 1 + (i % 2), 8, 3)
+  }
+  ctx.globalAlpha = .8
+  ctx.fillStyle = accent
+  ctx.fillRect(doorX - 2, baseline + 1, 4, 3)
   ctx.restore()
 }
 
@@ -1612,18 +1722,15 @@ function drawWorldV4(ctx, canvas, profiles, selectedName, p, t, hitMap, art) {
     drawAmbientBackV4(g, t)
   }
 
-  const ordered = profiles.slice(0, 4).map((profile, index) => ({ profile, site: POLIS_LAYOUTS_V4[index] }))
-  ordered.forEach(({ profile, site }) => drawZoneFoundationV4(g, site, profile.occupation, p, t))
-  ordered.forEach(({ profile, site }) => {
+  const ordered = profiles.slice(0, 4).map((profile, index) => {
+    const site = POLIS_LAYOUTS_V4[index]
     const image = art[profile.occupation] || art.herald
-    const maxW = site.y < 100 ? 245 : 255
-    const maxH = site.y < 100 ? 205 : 195
-    const ratio = Math.min(maxW / image.width, maxH / image.height)
-    const w = Math.round(image.width * ratio)
-    const h = Math.round(image.height * ratio)
-    const x = site.x * 3 - Math.round(w / 2)
-    const baseline = site.y * 3 + (site.y < 100 ? 12 : 2)
-    const y = baseline - h
+    return { profile, site, image, placement: buildingPlacementV4(site, image) }
+  })
+  ordered.forEach(({ profile, placement }) => drawApproachPathV4(g, placement, profile.occupation, p))
+  ordered.forEach(({ profile, site, image, placement }) => {
+    const { x, y, w, h } = placement
+    drawZoneFoundationV4(g, placement, image, profile.occupation, p)
     g.globalAlpha = profile.status === 'offline' ? .58 : 1
     if (profile.name === selectedName) {
       g.save()
@@ -1644,6 +1751,7 @@ function drawWorldV4(ctx, canvas, profiles, selectedName, p, t, hitMap, art) {
     }
     g.drawImage(image, x, y, w, h)
     g.globalAlpha = 1
+    drawZoneForegroundV4(g, placement, profile.occupation, p)
     drawZonePropsV4(g, site, profile.occupation, p, t)
   })
   drawAmbientFrontV4(g, t)
