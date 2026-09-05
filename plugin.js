@@ -1216,7 +1216,7 @@ function agoraV3(ctx, p, t) {
   textV3(ctx, 'AGORA', 160, 146, p.dark, 6)
 }
 
-function drawWorldV3(ctx, canvas, profiles, selectedName, p, t, hitMap) {
+function drawWorldV3(ctx, canvas, profiles, selectedName, p, t, hitMap, characterHitMap) {
   const buffer = canvas.__polisBuffer || (canvas.__polisBuffer = document.createElement('canvas'))
   if (buffer.width !== POLIS_W_V3) buffer.width = POLIS_W_V3
   if (buffer.height !== POLIS_H_V3) buffer.height = POLIS_H_V3
@@ -1253,6 +1253,13 @@ function drawWorldV3(ctx, canvas, profiles, selectedName, p, t, hitMap) {
     w: 86 * scale,
     h: 106 * scale
   }))
+  characterHitMap.current = ordered.map(({ profile, site }) => ({
+    name: profile.name,
+    x: ox + (site.x - 34) * scale,
+    y: oy + (site.y - 16) * scale,
+    w: 34 * scale,
+    h: 30 * scale
+  })).reverse()
 }
 
 let polisArtCache = null
@@ -1706,7 +1713,7 @@ function drawPolisTitleV4(ctx, p) {
   ctx.restore()
 }
 
-function drawWorldV4(ctx, canvas, profiles, selectedName, p, t, hitMap, art) {
+function drawWorldV4(ctx, canvas, profiles, selectedName, p, t, hitMap, characterHitMap, art) {
   const buffer = canvas.__polisArtBuffer || (canvas.__polisArtBuffer = document.createElement('canvas'))
   if (buffer.width !== 960) buffer.width = 960
   if (buffer.height !== 540) buffer.height = 540
@@ -1826,12 +1833,28 @@ function drawWorldV4(ctx, canvas, profiles, selectedName, p, t, hitMap, art) {
     w: 270 * scale,
     h: 315 * scale
   }))
+  characterHitMap.current = ordered.map(({ profile, site }) => {
+    const targetHeight = profile.occupation === 'warrior' ? 100 : 94
+    const targetWidth = Math.round(96 * (targetHeight / 118))
+    const centerX = site.x * 3 - 60
+    const baseline = site.y * 3 + 27
+    const padding = 7
+    return {
+      name: profile.name,
+      x: ox + (centerX - targetWidth / 2 - padding) * scale,
+      y: oy + (baseline - targetHeight - padding) * scale,
+      w: (targetWidth + padding * 2) * scale,
+      h: (targetHeight + padding * 2) * scale
+    }
+  }).reverse()
 }
 
-function PolisCanvas({ profiles, selectedName, onSelect, onOpen }) {
+function PolisCanvas({ profiles, selectedName, onSelect, onOpen, onNewSession }) {
   const canvasRef = useRef(null)
   const wrapRef = useRef(null)
   const hitMap = useRef([])
+  const characterHitMap = useRef([])
+  const [contextMenu, setContextMenu] = useState(null)
   const stateRef = useRef({ profiles, selectedName })
   stateRef.current = { profiles, selectedName }
 
@@ -1859,14 +1882,14 @@ function PolisCanvas({ profiles, selectedName, onSelect, onOpen }) {
         const ctx = canvas.getContext('2d')
         if (polisArtCache) {
           try {
-            drawWorldV4(ctx, canvas, stateRef.current.profiles, stateRef.current.selectedName, palette, time, hitMap, polisArtCache)
+            drawWorldV4(ctx, canvas, stateRef.current.profiles, stateRef.current.selectedName, palette, time, hitMap, characterHitMap, polisArtCache)
           } catch (error) {
             polisArtError = `render: ${error instanceof Error ? error.message : String(error)}`
             polisArtCache = null
-            drawWorldV3(ctx, canvas, stateRef.current.profiles, stateRef.current.selectedName, palette, time, hitMap)
+            drawWorldV3(ctx, canvas, stateRef.current.profiles, stateRef.current.selectedName, palette, time, hitMap, characterHitMap)
           }
         } else {
-          drawWorldV3(ctx, canvas, stateRef.current.profiles, stateRef.current.selectedName, palette, time, hitMap)
+          drawWorldV3(ctx, canvas, stateRef.current.profiles, stateRef.current.selectedName, palette, time, hitMap, characterHitMap)
         }
       }
       raf = requestAnimationFrame(frame)
@@ -1879,30 +1902,93 @@ function PolisCanvas({ profiles, selectedName, onSelect, onOpen }) {
     }
   }, [])
 
-  const locate = event => {
-    const rect = canvasRef.current.getBoundingClientRect()
-    const x = event.clientX - rect.left
-    const y = event.clientY - rect.top
-    return hitMap.current.find(hit => x >= hit.x && x <= hit.x + hit.w && y >= hit.y && y <= hit.y + hit.h)
+  useEffect(() => {
+    const dismiss = () => setContextMenu(null)
+    const onKey = event => {
+      if (event.key === 'Escape') dismiss()
+    }
+    window.addEventListener('pointerdown', dismiss)
+    window.addEventListener('blur', dismiss)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('pointerdown', dismiss)
+      window.removeEventListener('blur', dismiss)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [])
+
+  const locateInMap = (event, mapRef) => {
+    const canvas = canvasRef.current
+    const rect = canvas.getBoundingClientRect()
+    const x = (event.clientX - rect.left) * (canvas.width / rect.width)
+    const y = (event.clientY - rect.top) * (canvas.height / rect.height)
+    return mapRef.current.find(hit => x >= hit.x && x <= hit.x + hit.w && y >= hit.y && y <= hit.y + hit.h)
   }
+
+  const locate = event => locateInMap(event, hitMap)
+  const locateCharacter = event => locateInMap(event, characterHitMap)
 
   return jsx('div', {
     ref: wrapRef,
     className: 'relative min-h-[360px] min-w-0 flex-1 overflow-hidden rounded-l-xl',
-    children: jsx('canvas', {
-      ref: canvasRef,
-      className: 'block h-full w-full cursor-crosshair',
-      role: 'img',
-      'aria-label': 'Animated pixel-art Greek polis showing Hermes agent activity',
-      onClick: event => {
-        const hit = locate(event)
-        if (hit) { haptic('tap'); onSelect(hit.name) }
-      },
-      onDoubleClick: event => {
-        const hit = locate(event)
-        if (hit) onOpen(hit.name)
-      }
-    })
+    // Suppress the app-shell fallback menu across the canvas. Polis only
+    // offers character actions after the hit test below succeeds.
+    'data-context-menu-skip': 'true',
+    children: [
+      jsx('canvas', {
+        ref: canvasRef,
+        className: 'block h-full w-full cursor-crosshair',
+        role: 'img',
+        'aria-label': 'Animated pixel-art Greek polis showing Hermes agent activity',
+        onClick: event => {
+          const hit = locate(event)
+          if (hit) { haptic('tap'); onSelect(hit.name) }
+        },
+        onDoubleClick: event => {
+          const hit = locate(event)
+          if (hit) onOpen(hit.name)
+        },
+        onContextMenu: event => {
+          event.preventDefault()
+          event.stopPropagation()
+          const hit = locateCharacter(event)
+          if (!hit) {
+            setContextMenu(null)
+            return
+          }
+          const rect = wrapRef.current.getBoundingClientRect()
+          setContextMenu({
+            name: hit.name,
+            x: clamp(event.clientX - rect.left, 8, Math.max(8, rect.width - 180)),
+            y: clamp(event.clientY - rect.top, 8, Math.max(8, rect.height - 94))
+          })
+        }
+      }),
+      contextMenu ? jsxs('div', {
+        role: 'menu',
+        'aria-label': `${contextMenu.name} actions`,
+        className: 'absolute z-40 w-44 rounded-md border border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) p-1 text-(--ui-text-primary) shadow-xl',
+        style: { left: contextMenu.x, top: contextMenu.y },
+        onPointerDown: event => event.stopPropagation(),
+        onContextMenu: event => { event.preventDefault(); event.stopPropagation() },
+        children: [
+          jsxs('button', {
+            type: 'button',
+            role: 'menuitem',
+            className: 'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-(--ui-control-hover-background)',
+            onClick: () => { const name = contextMenu.name; setContextMenu(null); haptic('tap'); onSelect(name) },
+            children: [jsx(Codicon, { name: 'account' }), 'Details']
+          }),
+          jsxs('button', {
+            type: 'button',
+            role: 'menuitem',
+            className: 'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-(--ui-control-hover-background)',
+            onClick: () => { const name = contextMenu.name; setContextMenu(null); haptic('tap'); onNewSession(name) },
+            children: [jsx(Codicon, { name: 'add' }), 'New session']
+          })
+        ]
+      }) : null
+    ]
   })
 }
 
@@ -2176,6 +2262,15 @@ function PolisPage() {
     const profile = profiles.find(item => item.name === name)
     if (profile) { haptic('tap'); void openProfileSession(profile) }
   }, [profiles])
+  const newSessionByName = useCallback(name => {
+    if (typeof host.newChat !== 'function') {
+      host.notify({ kind: 'error', message: 'This Hermes Desktop build cannot open a profile session.' })
+      return
+    }
+    Promise.resolve(host.newChat(name)).catch(error => {
+      host.notify({ kind: 'error', message: `Could not start a new session: ${error?.message || error}` })
+    })
+  }, [])
   const counts = profiles.reduce((out, profile) => { out[profile.status] = (out[profile.status] || 0) + 1; return out }, {})
 
   if (roster.isLoading) {
@@ -2200,7 +2295,7 @@ function PolisPage() {
       }),
       jsxs('main', {
         className: 'm-3 flex min-h-0 flex-1 overflow-hidden rounded-xl border border-(--ui-stroke-secondary)',
-        children: [jsx(PolisCanvas, { profiles, selectedName: selected?.name, onSelect: setSelectedName, onOpen: openByName }), jsx(DetailPanel, { profiles, profile: selected, onSelect: setSelectedName, onOccupation: assignOccupation, onOpen: openByName })]
+        children: [jsx(PolisCanvas, { profiles, selectedName: selected?.name, onSelect: setSelectedName, onOpen: openByName, onNewSession: newSessionByName }), jsx(DetailPanel, { profiles, profile: selected, onSelect: setSelectedName, onOccupation: assignOccupation, onOpen: openByName })]
       })
     ]
   })
