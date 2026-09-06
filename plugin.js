@@ -2309,7 +2309,8 @@ async function sendProfileMessage(profile, message) {
     }
 
     if (typeof host.retainProfile === 'function') {
-      release = await host.retainProfile(route)
+      const retained = await host.retainProfile(route)
+      release = typeof retained === 'function' ? retained : () => undefined
     }
 
     const targetProfile = typeof route === 'string' ? profile.name : route.targetProfile
