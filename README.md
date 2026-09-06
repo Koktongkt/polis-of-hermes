@@ -16,7 +16,7 @@ A living ancient-Greek control surface for [Hermes Desktop](https://github.com/N
 - Silhouette-following selection glow instead of rectangular bounding boxes
 - Perspective-matched plinths, silhouette-derived contact shadows, foreground floor overlap, and doorway-aligned worn paths that seat each workplace inside its terrace zone
 - Illustrated Mediterranean nameplates and title plaque
-- Clickable citizens, occupation persistence, Hermes-native conversation opening, and direct messaging into each profile's latest visible conversation
+- Clickable citizens, occupation persistence, Hermes-native conversation opening, and direct messaging into either the latest visible conversation or a fresh chat
 - Compact resizable agent panel with a persisted user-selected width
 - Expandable per-agent action cards with live status and one-hour activity logs
 - Theme-aware controls and a craft/character dropdown

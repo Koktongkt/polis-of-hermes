@@ -1934,7 +1934,7 @@ function PolisCanvas({ profiles, selectedName, onSelect, onOpen, onNewSession, o
     if (!menu?.name || !message || menu.sending) return
     setContextMenu({ ...menu, sending: true })
     try {
-      await onDirectMessage(menu.name, message)
+      await onDirectMessage(menu.name, message, Boolean(menu.newChat))
       setContextMenu(null)
     } catch {
       setContextMenu(current => current?.name === menu.name ? { ...current, sending: false } : current)
@@ -1976,6 +1976,7 @@ function PolisCanvas({ profiles, selectedName, onSelect, onOpen, onNewSession, o
             y: clamp(event.clientY - rect.top, 8, Math.max(8, rect.height - 220)),
             draft: '',
             composing: false,
+            newChat: false,
             sending: false
           })
         }
@@ -1991,7 +1992,7 @@ function PolisCanvas({ profiles, selectedName, onSelect, onOpen, onNewSession, o
           jsxs('div', {
             className: 'flex items-center justify-between gap-2 px-2 py-1.5',
             children: [
-              jsx('span', { className: 'truncate text-xs font-medium', children: `Message @${contextMenu.name}` }),
+              jsx('span', { className: 'truncate text-xs font-medium', children: contextMenu.newChat ? `New chat with @${contextMenu.name}` : `Message @${contextMenu.name}` }),
               jsx('button', { type: 'button', title: 'Back', className: 'grid h-6 w-6 shrink-0 place-items-center rounded hover:bg-(--ui-control-hover-background)', onClick: () => setContextMenu(current => ({ ...current, composing: false, sending: false })), children: jsx(Codicon, { name: 'close' }) })
             ]
           }),
@@ -2030,8 +2031,15 @@ function PolisCanvas({ profiles, selectedName, onSelect, onOpen, onNewSession, o
             type: 'button',
             role: 'menuitem',
             className: 'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-(--ui-control-hover-background)',
-            onClick: () => { haptic('tap'); setContextMenu(current => ({ ...current, composing: true })) },
+            onClick: () => { haptic('tap'); setContextMenu(current => ({ ...current, composing: true, newChat: false })) },
             children: [jsx(Codicon, { name: 'send' }), 'Direct message']
+          }),
+          jsxs('button', {
+            type: 'button',
+            role: 'menuitem',
+            className: 'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-(--ui-control-hover-background)',
+            onClick: () => { haptic('tap'); setContextMenu(current => ({ ...current, composing: true, newChat: true })) },
+            children: [jsx(Codicon, { name: 'comment-add' }), 'Direct message as new chat']
           }),
           jsxs('button', {
             type: 'button',
@@ -2290,7 +2298,7 @@ async function openProfileSession(profile) {
   }
 }
 
-async function sendProfileMessage(profile, message) {
+async function sendProfileMessage(profile, message, newChat = false) {
   const text = String(message || '').trim()
   if (!profile?.name || !text) return
   if (typeof host.requestProfile !== 'function') {
@@ -2320,7 +2328,7 @@ async function sendProfileMessage(profile, message) {
     // vanish when the user later visits that profile. Resolve the newest
     // visible conversation through the target backend instead of trusting the
     // roster's canonical/last-session preview; create one when none exists.
-    const listed = await request('session.list', {
+    const listed = newChat ? null : await request('session.list', {
       profile: targetProfile,
       limit: 1,
       include_hidden: false
@@ -2345,7 +2353,7 @@ async function sendProfileMessage(profile, message) {
       text,
       queued: true
     })
-    host.notify({ kind: 'success', message: `Message sent to @${profile.name}.` })
+    host.notify({ kind: 'success', message: newChat ? `New chat started with @${profile.name}.` : `Message sent to @${profile.name}.` })
   } catch (error) {
     host.notify({ kind: 'error', message: `Could not message @${profile.name}: ${error?.message || error}` })
     throw error
@@ -2389,10 +2397,10 @@ function PolisPage() {
       host.notify({ kind: 'error', message: `Could not start a new session: ${error?.message || error}` })
     })
   }, [])
-  const directMessageByName = useCallback((name, message) => {
+  const directMessageByName = useCallback((name, message, newChat = false) => {
     const profile = profiles.find(item => item.name === name)
     if (!profile) return Promise.reject(new Error(`Profile ${name} is no longer available.`))
-    return sendProfileMessage(profile, message)
+    return sendProfileMessage(profile, message, newChat)
   }, [profiles])
   const counts = profiles.reduce((out, profile) => { out[profile.status] = (out[profile.status] || 0) + 1; return out }, {})
 
