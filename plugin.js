@@ -1849,7 +1849,7 @@ function drawWorldV4(ctx, canvas, profiles, selectedName, p, t, hitMap, characte
   }).reverse()
 }
 
-function PolisCanvas({ profiles, selectedName, onSelect, onOpen, onNewSession }) {
+function PolisCanvas({ profiles, selectedName, onSelect, onOpen, onNewSession, onDirectMessage }) {
   const canvasRef = useRef(null)
   const wrapRef = useRef(null)
   const hitMap = useRef([])
@@ -1928,6 +1928,19 @@ function PolisCanvas({ profiles, selectedName, onSelect, onOpen, onNewSession })
   const locate = event => locateInMap(event, hitMap)
   const locateCharacter = event => locateInMap(event, characterHitMap)
 
+  const submitDirectMessage = async () => {
+    const menu = contextMenu
+    const message = String(menu?.draft || '').trim()
+    if (!menu?.name || !message || menu.sending) return
+    setContextMenu({ ...menu, sending: true })
+    try {
+      await onDirectMessage(menu.name, message)
+      setContextMenu(null)
+    } catch {
+      setContextMenu(current => current?.name === menu.name ? { ...current, sending: false } : current)
+    }
+  }
+
   return jsx('div', {
     ref: wrapRef,
     className: 'relative min-h-[360px] min-w-0 flex-1 overflow-hidden rounded-l-xl',
@@ -1959,25 +1972,66 @@ function PolisCanvas({ profiles, selectedName, onSelect, onOpen, onNewSession })
           const rect = wrapRef.current.getBoundingClientRect()
           setContextMenu({
             name: hit.name,
-            x: clamp(event.clientX - rect.left, 8, Math.max(8, rect.width - 180)),
-            y: clamp(event.clientY - rect.top, 8, Math.max(8, rect.height - 94))
+            x: clamp(event.clientX - rect.left, 8, Math.max(8, rect.width - 296)),
+            y: clamp(event.clientY - rect.top, 8, Math.max(8, rect.height - 220)),
+            draft: '',
+            composing: false,
+            sending: false
           })
         }
       }),
       contextMenu ? jsxs('div', {
         role: 'menu',
         'aria-label': `${contextMenu.name} actions`,
-        className: 'absolute z-40 w-44 rounded-md border border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) p-1 text-(--ui-text-primary) shadow-xl',
+        className: 'absolute z-40 w-72 rounded-md border border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) p-1 text-(--ui-text-primary) shadow-xl',
         style: { left: contextMenu.x, top: contextMenu.y },
         onPointerDown: event => event.stopPropagation(),
         onContextMenu: event => { event.preventDefault(); event.stopPropagation() },
-        children: [
+        children: contextMenu.composing ? [
+          jsxs('div', {
+            className: 'flex items-center justify-between gap-2 px-2 py-1.5',
+            children: [
+              jsx('span', { className: 'truncate text-xs font-medium', children: `Message @${contextMenu.name}` }),
+              jsx('button', { type: 'button', title: 'Back', className: 'grid h-6 w-6 shrink-0 place-items-center rounded hover:bg-(--ui-control-hover-background)', onClick: () => setContextMenu(current => ({ ...current, composing: false, sending: false })), children: jsx(Codicon, { name: 'close' }) })
+            ]
+          }),
+          jsx('textarea', {
+            autoFocus: true,
+            rows: 4,
+            value: contextMenu.draft,
+            disabled: contextMenu.sending,
+            placeholder: `Send a message to @${contextMenu.name} without leaving the Polis…`,
+            'aria-label': `Message ${contextMenu.name}`,
+            className: 'min-h-20 w-full resize-none rounded border border-(--ui-stroke-secondary) bg-(--ui-control-background) px-2.5 py-2 text-xs text-(--ui-text-primary) outline-none placeholder:text-(--ui-text-quaternary) focus:border-(--ui-accent)',
+            onChange: event => setContextMenu(current => ({ ...current, draft: event.target.value })),
+            onKeyDown: event => {
+              if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+                event.preventDefault()
+                void submitDirectMessage()
+              }
+            }
+          }),
+          jsxs('div', {
+            className: 'flex items-center justify-between gap-2 px-1 pb-1 pt-2',
+            children: [
+              jsx('span', { className: 'text-[0.625rem] text-(--ui-text-quaternary)', children: 'Ctrl+Enter to send' }),
+              jsx(Button, { size: 'sm', disabled: contextMenu.sending || !String(contextMenu.draft || '').trim(), onClick: () => void submitDirectMessage(), children: contextMenu.sending ? 'Sending…' : 'Send' })
+            ]
+          })
+        ] : [
           jsxs('button', {
             type: 'button',
             role: 'menuitem',
             className: 'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-(--ui-control-hover-background)',
             onClick: () => { const name = contextMenu.name; setContextMenu(null); haptic('tap'); onSelect(name) },
             children: [jsx(Codicon, { name: 'account' }), 'Details']
+          }),
+          jsxs('button', {
+            type: 'button',
+            role: 'menuitem',
+            className: 'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-(--ui-control-hover-background)',
+            onClick: () => { haptic('tap'); setContextMenu(current => ({ ...current, composing: true })) },
+            children: [jsx(Codicon, { name: 'send' }), 'Direct message']
           }),
           jsxs('button', {
             type: 'button',
@@ -2236,6 +2290,69 @@ async function openProfileSession(profile) {
   }
 }
 
+async function sendProfileMessage(profile, message) {
+  const text = String(message || '').trim()
+  if (!profile?.name || !text) return
+  if (typeof host.requestProfile !== 'function') {
+    throw new Error('This Hermes Desktop build cannot send profile messages from plugins.')
+  }
+
+  let release = () => undefined
+  try {
+    let route = profile.name
+    if (typeof host.profileRoutes === 'function') {
+      const routes = await host.profileRoutes()
+      const activeConnectionId = String(host.state.connectionId?.get?.() || '').trim()
+      const candidates = (Array.isArray(routes) ? routes : []).filter(item => item?.profile === profile.name)
+      route = candidates.find(item => activeConnectionId && item.connectionId === activeConnectionId)
+        || (candidates.length === 1 ? candidates[0] : profile.name)
+    }
+
+    if (typeof host.retainProfile === 'function') {
+      release = await host.retainProfile(route)
+    }
+
+    const targetProfile = typeof route === 'string' ? profile.name : route.targetProfile
+    const request = (method, params) => host.requestProfile(route, method, params)
+    // A profile rail switch and its Sessions list intentionally exclude the
+    // hidden Bot Chat. Sending there succeeds but makes the message appear to
+    // vanish when the user later visits that profile. Resolve the newest
+    // visible conversation through the target backend instead of trusting the
+    // roster's canonical/last-session preview; create one when none exists.
+    const listed = await request('session.list', {
+      profile: targetProfile,
+      limit: 1,
+      include_hidden: false
+    })
+    const session = Array.isArray(listed?.sessions) ? listed.sessions[0] : null
+    const storedId = session?.resolved_id || session?.id
+    const opened = storedId
+      ? await request('session.resume', {
+          profile: targetProfile,
+          session_id: String(storedId),
+          omit_messages: true,
+          source: 'desktop'
+        })
+      : await request('session.create', {
+          profile: targetProfile,
+          source: 'desktop'
+        })
+    const runtimeId = opened?.session_id
+    if (!runtimeId) throw new Error('The profile did not return a live session.')
+    await request('prompt.submit', {
+      session_id: String(runtimeId),
+      text,
+      queued: true
+    })
+    host.notify({ kind: 'success', message: `Message sent to @${profile.name}.` })
+  } catch (error) {
+    host.notify({ kind: 'error', message: `Could not message @${profile.name}: ${error?.message || error}` })
+    throw error
+  } finally {
+    release()
+  }
+}
+
 function PolisPage() {
   const roster = useRoster()
   const busyBySession = useValue(host.state.busyBySession)
@@ -2271,6 +2388,11 @@ function PolisPage() {
       host.notify({ kind: 'error', message: `Could not start a new session: ${error?.message || error}` })
     })
   }, [])
+  const directMessageByName = useCallback((name, message) => {
+    const profile = profiles.find(item => item.name === name)
+    if (!profile) return Promise.reject(new Error(`Profile ${name} is no longer available.`))
+    return sendProfileMessage(profile, message)
+  }, [profiles])
   const counts = profiles.reduce((out, profile) => { out[profile.status] = (out[profile.status] || 0) + 1; return out }, {})
 
   if (roster.isLoading) {
@@ -2295,7 +2417,7 @@ function PolisPage() {
       }),
       jsxs('main', {
         className: 'm-3 flex min-h-0 flex-1 overflow-hidden rounded-xl border border-(--ui-stroke-secondary)',
-        children: [jsx(PolisCanvas, { profiles, selectedName: selected?.name, onSelect: setSelectedName, onOpen: openByName, onNewSession: newSessionByName }), jsx(DetailPanel, { profiles, profile: selected, onSelect: setSelectedName, onOccupation: assignOccupation, onOpen: openByName })]
+        children: [jsx(PolisCanvas, { profiles, selectedName: selected?.name, onSelect: setSelectedName, onOpen: openByName, onNewSession: newSessionByName, onDirectMessage: directMessageByName }), jsx(DetailPanel, { profiles, profile: selected, onSelect: setSelectedName, onOccupation: assignOccupation, onOpen: openByName })]
       })
     ]
   })
