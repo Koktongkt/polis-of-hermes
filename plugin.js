@@ -1327,6 +1327,47 @@ const POLIS_LAYOUTS_V4 = [
   { x: 74, y: 146 }, { x: 246, y: 146 }
 ]
 
+function buildSceneEntriesV4(profiles) {
+  return profiles.slice(0, POLIS_LAYOUTS_V4.length).map((profile, index) => {
+    const site = POLIS_LAYOUTS_V4[index]
+    return { profile, site, row: site.y < 100 ? 'upper' : 'lower' }
+  })
+}
+
+function sceneRenderPlanV4(entries) {
+  const plan = []
+  const occupiedRows = ['upper', 'lower'].filter(row => entries.some(entry => entry.row === row))
+  const deepestRow = occupiedRows.at(-1)
+  for (const row of occupiedRows) {
+    const rowEntries = entries.filter(entry => entry.row === row)
+    for (const entry of rowEntries) plan.push({ layer: 'path', row, entry })
+    for (const entry of rowEntries) {
+      for (const layer of ['foundation', 'building', 'foreground', 'props']) {
+        plan.push({ layer, row, entry })
+      }
+    }
+    if (row === deepestRow) plan.push({ layer: 'ambience', row, entry: null })
+    for (const layer of ['character', 'activity', 'nameplate']) {
+      for (const entry of rowEntries) plan.push({ layer, row, entry })
+    }
+  }
+  return plan
+}
+
+function agentCenterV4(site) {
+  if (site.y !== 76) return site.x * 3 - 60
+  return site.x * 3 + (site.x < 160 ? 160 : -160)
+}
+
+function siteHitBoxV4(site) {
+  const workplaceLeft = site.x * 3 - 135
+  const workplaceRight = site.x * 3 + 135
+  if (site.y !== 76) return { x: workplaceLeft, y: site.y * 3 - 215, w: 270, h: 315 }
+  const citizenCenter = agentCenterV4(site)
+  const x = Math.min(workplaceLeft, citizenCenter - 45)
+  return { x, y: site.y * 3 - 215, w: Math.max(workplaceRight, citizenCenter + 45) - x, h: 315 }
+}
+
 function drawCharacterArtV4(ctx, site, profile, selectedName, p, t, art) {
   const occupation = profile.occupation || 'herald'
   const key = `character${occupation.charAt(0).toUpperCase()}${occupation.slice(1)}`
@@ -1346,7 +1387,7 @@ function drawCharacterArtV4(ctx, site, profile, selectedName, p, t, art) {
   const ratio = targetH / frameH
   const w = Math.round(frameW * ratio)
   const h = Math.round(frameH * ratio)
-  const centerX = site.x * 3 - 60
+  const centerX = agentCenterV4(site)
   const baseline = site.y * 3 + 27
   const x = Math.round(centerX - w / 2)
   const y = Math.round(baseline - h)
@@ -1668,7 +1709,7 @@ function drawZonePropsV4(ctx, site, occupation, p, t) {
 function drawNameplateV4(ctx, site, profile, p) {
   const name = profile.display_name || (profile.name === 'default' ? 'Hermes' : profile.name)
   const detail = profile.activity?.phase === 'working' ? toolCategoryLabel(profile.activity.category) : activityLabel(profile.status)
-  const x = site.x * 3 - 60
+  const x = agentCenterV4(site)
   const y = site.y * 3 + 41
   const width = Math.max(104, Math.min(148, name.length * 8 + 30))
   ctx.save()
@@ -1729,46 +1770,44 @@ function drawWorldV4(ctx, canvas, profiles, selectedName, p, t, hitMap, characte
     drawAmbientBackV4(g, t)
   }
 
-  const ordered = profiles.slice(0, 4).map((profile, index) => {
-    const site = POLIS_LAYOUTS_V4[index]
+  const ordered = buildSceneEntriesV4(profiles).map(({ profile, site, row }) => {
     const image = art[profile.occupation] || art.herald
-    return { profile, site, image, placement: buildingPlacementV4(site, image) }
+    return { profile, site, row, image, placement: buildingPlacementV4(site, image) }
   })
-  ordered.forEach(({ profile, placement }) => drawApproachPathV4(g, placement, profile.occupation, p))
-  ordered.forEach(({ profile, site, image, placement }) => {
-    const { x, y, w, h } = placement
-    drawZoneFoundationV4(g, placement, image, profile.occupation, p)
-    g.globalAlpha = profile.status === 'offline' ? .58 : 1
-    if (profile.name === selectedName) {
-      g.save()
-
-      // Animated gold glow
-      g.shadowColor = '#FFD54A'
-      g.shadowBlur = 34 + Math.sin(t * 0.006) * 10
-      g.shadowOffsetX = 0
-      g.shadowOffsetY = 0
-
-      // Make selected sprite visibly brighter
-      g.filter = 'brightness(1.3) saturate(1.35)'
-
-      // Draw once to create the glow
-      g.drawImage(image, x, y, w, h)
-
-      g.restore()
+  const plan = sceneRenderPlanV4(ordered)
+  for (const { layer, row, entry } of plan) {
+    if (layer === 'ambience') {
+      drawAmbientFrontV4(g, t)
+      continue
     }
-    g.drawImage(image, x, y, w, h)
-    g.globalAlpha = 1
-    drawZoneForegroundV4(g, placement, profile.occupation, p)
-    drawZonePropsV4(g, site, profile.occupation, p, t)
-  })
-  drawAmbientFrontV4(g, t)
-  ordered.forEach(({ profile, site }) => drawCharacterArtV4(g, site, profile, selectedName, p, t, art))
-
-  g.save()
-  g.scale(3, 3)
-  ordered.forEach(({ profile, site }) => activityV3(g, site, profile, p, t))
-  g.restore()
-  ordered.forEach(({ profile, site }) => drawNameplateV4(g, site, profile, p))
+    const { profile, site, image, placement } = entry
+    const { x, y, w, h } = placement
+    if (layer === 'path') drawApproachPathV4(g, placement, profile.occupation, p)
+    else if (layer === 'foundation') drawZoneFoundationV4(g, placement, image, profile.occupation, p)
+    else if (layer === 'building') {
+      g.globalAlpha = profile.status === 'offline' ? .58 : 1
+      if (profile.name === selectedName) {
+        g.save()
+        g.shadowColor = '#FFD54A'
+        g.shadowBlur = 34 + Math.sin(t * 0.006) * 10
+        g.shadowOffsetX = 0
+        g.shadowOffsetY = 0
+        g.filter = 'brightness(1.3) saturate(1.35)'
+        g.drawImage(image, x, y, w, h)
+        g.restore()
+      }
+      g.drawImage(image, x, y, w, h)
+      g.globalAlpha = 1
+    } else if (layer === 'foreground') drawZoneForegroundV4(g, placement, profile.occupation, p)
+    else if (layer === 'props') drawZonePropsV4(g, site, profile.occupation, p, t)
+    else if (layer === 'character') drawCharacterArtV4(g, site, profile, selectedName, p, t, art)
+    else if (layer === 'activity') {
+      g.save()
+      g.scale(3, 3)
+      activityV3(g, site, profile, p, t)
+      g.restore()
+    } else if (layer === 'nameplate') drawNameplateV4(g, site, profile, p)
+  }
   drawPolisTitleV4(g, p)
 
   ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -1826,17 +1865,20 @@ function drawWorldV4(ctx, canvas, profiles, selectedName, p, t, hitMap, characte
   )
 
   ctx.restore()
-  hitMap.current = ordered.map(({ profile, site }) => ({
+  hitMap.current = ordered.map(({ profile, site }) => {
+   const box = siteHitBoxV4(site)
+   return {
     name: profile.name,
-    x: ox + (site.x * 3 - 135) * scale,
-    y: oy + (site.y * 3 - 215) * scale,
-    w: 270 * scale,
-    h: 315 * scale
-  }))
+    x: ox + box.x * scale,
+    y: oy + box.y * scale,
+    w: box.w * scale,
+    h: box.h * scale
+   }
+  })
   characterHitMap.current = ordered.map(({ profile, site }) => {
     const targetHeight = profile.occupation === 'warrior' ? 100 : 94
     const targetWidth = Math.round(96 * (targetHeight / 118))
-    const centerX = site.x * 3 - 60
+    const centerX = agentCenterV4(site)
     const baseline = site.y * 3 + 27
     const padding = 7
     return {
@@ -1847,6 +1889,18 @@ function drawWorldV4(ctx, canvas, profiles, selectedName, p, t, hitMap, characte
       h: (targetHeight + padding * 2) * scale
     }
   }).reverse()
+}
+
+function canvasPoint(event, canvas) {
+  const rect = canvas.getBoundingClientRect()
+  return {
+    x: (event.clientX - rect.left) * (canvas.width / rect.width),
+    y: (event.clientY - rect.top) * (canvas.height / rect.height)
+  }
+}
+
+function hitTest(point, map) {
+  return map.find(hit => point.x >= hit.x && point.x <= hit.x + hit.w && point.y >= hit.y && point.y <= hit.y + hit.h)
 }
 
 function PolisCanvas({ profiles, selectedName, onSelect, onOpen, onNewSession, onDirectMessage }) {
@@ -1919,10 +1973,7 @@ function PolisCanvas({ profiles, selectedName, onSelect, onOpen, onNewSession, o
 
   const locateInMap = (event, mapRef) => {
     const canvas = canvasRef.current
-    const rect = canvas.getBoundingClientRect()
-    const x = (event.clientX - rect.left) * (canvas.width / rect.width)
-    const y = (event.clientY - rect.top) * (canvas.height / rect.height)
-    return mapRef.current.find(hit => x >= hit.x && x <= hit.x + hit.w && y >= hit.y && y <= hit.y + hit.h)
+    return hitTest(canvasPoint(event, canvas), mapRef.current)
   }
 
   const locate = event => locateInMap(event, hitMap)

@@ -15,6 +15,7 @@ A living ancient-Greek control surface for [Hermes Desktop](https://github.com/N
 - Secondary ambience for smoke, sparks, birds, and drifting pollen
 - Silhouette-following selection glow instead of rectangular bounding boxes
 - Perspective-matched plinths, silhouette-derived contact shadows, foreground floor overlap, and doorway-aligned worn paths that seat each workplace inside its terrace zone
+- Explicit upper/lower terrace painter ordering, with upper citizens anchored in the central walkway so foreground workplaces cannot read as platforms beneath them
 - Illustrated Mediterranean nameplates and title plaque
 - Clickable citizens, occupation persistence, Hermes-native conversation opening, and direct messaging into either the latest visible conversation or a fresh chat
 - Compact resizable agent panel with a persisted user-selected width
@@ -83,6 +84,22 @@ node --check plugin.js
 After editing, Hermes Desktop normally hot-reloads the plugin. If it does not, run **Reload desktop plugins** from the command palette.
 
 The processing utilities require Python, Pillow, NumPy, and SciPy and are development-only. Their source-image paths should be adjusted before regeneration.
+
+## Testing
+
+Run the deterministic interaction and scene-order tests with:
+
+```bash
+node --test tests/polis.test.mjs
+```
+
+Run the visual and asset-integrity suite with:
+
+```bash
+python -m unittest tests/test_visual_regression.py -v
+```
+
+The visual suite verifies the four-frame runtime atlas, bounds lossy WebP variation outside approved motion regions, checks every occupation atlas, and compares a deterministic scene render against the committed depth-order reference. Run `tests/render_visual_fixtures.py` deliberately when an approved visual change requires updating that reference. `tests/render_tile_prototypes.py` creates a review-only comparison of three treatments for removing one raised occupation pad; it does not alter runtime artwork.
 
 ## Environment animation model
 
