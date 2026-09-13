@@ -345,7 +345,7 @@ function loadPolisArtV4() {
     polisArtError = `loading: ${root}`
     const filePath = name => `${root}\\polis-of-hermes\\assets\\${name}`
     const files = {
-      canonicalCommunity: 'lpc-builder/sources/image_c76574.png',
+      canonicalCommunity: 'lpc-builder/sources/polis-bright-bazaar-combined.png',
       lpcHermes: 'lpc-hermes-example/hermes-lpc-polis-atlas.png',
       lpcAivory: 'lpc-review-batch/aivory/aivory-polis-atlas.png',
       lpcCody: 'lpc-review-batch/cody/cody-polis-atlas.png',
@@ -381,7 +381,7 @@ function buildCanonicalSceneEntries(profiles) {
 
 function drawCanonicalCommunity(ctx, canvas, profiles, selectedName, p, t, hitMap, characterHitMap, art) {
   const worldW = 1001
-  const worldH = 817
+  const worldH = 1765
   const buffer = canvas.__canonicalPolisBuffer || (canvas.__canonicalPolisBuffer = document.createElement('canvas'))
   if (buffer.width !== worldW) buffer.width = worldW
   if (buffer.height !== worldH) buffer.height = worldH

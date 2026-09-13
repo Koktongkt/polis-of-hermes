@@ -77,7 +77,8 @@ test('canonical community assigns detached citizens to approved native-image foo
 })
 
 test('canonical community is the only renderer and loads only current art', () => {
-  assert.match(source, /canonicalCommunity:\s*'lpc-builder\/sources\/image_c76574\.png'/)
+  assert.match(source, /canonicalCommunity:\s*'lpc-builder\/sources\/polis-bright-bazaar-combined\.png'/)
+  assert.match(source, /const worldH = 1765/)
   assert.match(source, /drawCanonicalCommunity/)
   assert.doesNotMatch(source, /USE_CANONICAL_LPC_COMMUNITY|USE_LPC_CHARACTER_TEST/)
   assert.doesNotMatch(source, /drawWorldV[234]?|drawWorld\s*\(/)

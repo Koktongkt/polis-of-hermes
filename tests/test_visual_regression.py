@@ -12,8 +12,18 @@ ASSETS = ROOT / "assets"
 
 class EnvironmentIntegrityTests(unittest.TestCase):
     def test_canonical_environment_has_expected_dimensions(self):
-        with Image.open(ASSETS / "lpc-builder" / "sources" / "image_c76574.png") as environment:
-            self.assertEqual(environment.size, (1001, 817))
+        with Image.open(ASSETS / "lpc-builder" / "sources" / "polis-bright-bazaar-combined.png") as environment:
+            self.assertEqual(environment.size, (1001, 1765))
+
+    def test_expanded_environment_preserves_the_original_core_pixel_for_pixel(self):
+        with (
+            Image.open(ASSETS / "lpc-builder" / "sources" / "image_c76574.png") as original,
+            Image.open(ASSETS / "lpc-builder" / "sources" / "polis-bright-bazaar-combined.png") as expanded,
+        ):
+            self.assertEqual(
+                expanded.convert("RGBA").crop((0, 0, 1001, 817)).tobytes(),
+                original.convert("RGBA").tobytes(),
+            )
 
     def test_current_profile_atlases_have_expected_animation_grid(self):
         atlases = (

@@ -1,13 +1,13 @@
 {
   "schema_version": 2,
-  "asset": "sources/image_c76574.png",
+  "asset": "sources/polis-bright-bazaar-combined.png",
   "role": "canonical-community-core-base",
-  "sha256": "786227e8f5e861feea3c00576c7de02b96a8440348e82ddd77e9b12fa498f933",
+  "sha256": "fb36f0dcb6c937b3e091af67fe9d5f12ab0f508c0d4e6625ad41a59b4f4683e7",
   "dimensions": [
     1001,
-    817
+    1765
   ],
-  "mode": "RGBA",
+  "mode": "RGB",
   "use_policy": {
     "immutable_core": true,
     "preserve_original_pixels": true,
@@ -15,7 +15,7 @@
   },
   "license_status": "unknown-provided-reference-review-only",
   "notes": [
-    "Replaces image_6c2342.png as the canonical base.",
+    "Extends image_c76574.png southward with the approved brightened bazaar while preserving the original 1001x817 core pixel-for-pixel.",
     "Future expansion should match this image's perspective, scale, lighting, materials, roads and prop density."
   ]
 }

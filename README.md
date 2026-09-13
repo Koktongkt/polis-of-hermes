@@ -44,7 +44,7 @@ No package installation or build step is required. The plugin is plain JavaScrip
 polis-of-hermes/
 ├── plugin.js                  # Plugin UI, state model, and canvas renderer
 └── assets/
-    ├── lpc-builder/sources/image_c76574.png # Current canonical community
+    ├── lpc-builder/sources/polis-bright-bazaar-combined.png # Current expanded canonical community
     ├── lpc-hermes-example/                  # Hermes atlas + credits
     └── lpc-review-batch/                    # Aivory, Cody, Alpha Sage atlases + credits
 ```
