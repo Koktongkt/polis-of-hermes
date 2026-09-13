@@ -102,6 +102,22 @@ test('ambient citizens alternate between meaningful stations and safe authored t
   assert.equal(Number.isInteger(profileSeed('default')), true)
 })
 
+test('every idle citizen reaches the lower bazaar without teleporting', () => {
+  const { citizenMotionAt, buildCanonicalSceneEntries } = load(
+    ['profileSeed', 'rectsOverlap', 'worldPointAllowed', 'citizenMotionAt', 'buildCanonicalSceneEntries'],
+    ['CANONICAL_CITIZEN_ANCHORS', 'CANONICAL_NAV_NODES', 'CITIZEN_CLEARANCE', 'CANONICAL_WORLD_GEOMETRY']
+  )
+  const entries = buildCanonicalSceneEntries(
+    ['default', 'aivory', 'cody', 'alpha_sage'].map(name => ({ name, status: 'idle' }))
+  )
+
+  for (const entry of entries) {
+    const samples = Array.from({ length: 721 }, (_, index) => citizenMotionAt(entry.profile, entry.anchor, index * 1_000))
+    assert.ok(samples.some(sample => sample.y > 1200), `${entry.profile.name} should traverse the lower bazaar`)
+    assert.equal(samples.every(sample => sample.x !== undefined && sample.y !== undefined), true)
+  }
+})
+
 test('roaming citizens use true directional walk rows instead of facing forward', () => {
   const { citizenAnimationAt } = load(
     ['profileSeed', 'citizenAnimationAt'],
@@ -149,18 +165,31 @@ test('directional movement does not mirror or rotate forward-facing artwork', ()
   assert.match(source, /citizenAnimationAt\(profile, motion, t\)/)
 })
 
-test('working and attention states keep citizens stationed at their home environment object', () => {
+test('non-orchestrator work and attention states keep citizens at their home object', () => {
   const { citizenMotionAt, buildCanonicalSceneEntries } = load(
     ['profileSeed', 'citizenMotionAt', 'buildCanonicalSceneEntries'],
     ['CANONICAL_CITIZEN_ANCHORS', 'CANONICAL_NAV_NODES']
   )
   for (const status of ['working', 'waiting', 'failed']) {
-    const [entry] = buildCanonicalSceneEntries([{ name: 'default', status }])
+    const name = status === 'working' ? 'aivory' : 'default'
+    const [entry] = buildCanonicalSceneEntries([{ name, status }])
     const motion = citizenMotionAt(entry.profile, entry.anchor, 93_000)
     assert.equal(motion.mode, 'stationed')
     assert.deepEqual([motion.x, motion.y], [entry.anchor.x, entry.anchor.y])
     assert.equal(motion.station.id, entry.anchor.home)
   }
+})
+
+test('the working default orchestrator patrols beyond the upper layout', () => {
+  const { citizenMotionAt, buildCanonicalSceneEntries } = load(
+    ['profileSeed', 'rectsOverlap', 'worldPointAllowed', 'citizenMotionAt', 'buildCanonicalSceneEntries'],
+    ['CANONICAL_CITIZEN_ANCHORS', 'CANONICAL_NAV_NODES', 'CITIZEN_CLEARANCE', 'CANONICAL_WORLD_GEOMETRY']
+  )
+  const [entry] = buildCanonicalSceneEntries([{ name: 'default', status: 'working' }])
+  const samples = Array.from({ length: 241 }, (_, index) => citizenMotionAt(entry.profile, entry.anchor, index * 500))
+
+  assert.ok(samples.some(sample => sample.mode === 'roaming'))
+  assert.ok(samples.some(sample => sample.y > 817), 'default should patrol into the grass and lower map while working')
 })
 
 test('citizen routes reference real semantic navigation nodes', () => {
@@ -169,10 +198,17 @@ test('citizen routes reference real semantic navigation nodes', () => {
   const context = vm.createContext({})
   vm.runInContext(`${anchorsSource}\n${nodesSource}\nglobalThis.data = { anchors: CANONICAL_CITIZEN_ANCHORS, nodes: CANONICAL_NAV_NODES }`, context)
   const ids = new Set(context.data.nodes.map(node => node.id))
+  const byId = new Map(context.data.nodes.map(node => [node.id, node]))
 
   assert.equal(context.data.nodes.every(node => node.kind && Array.isArray(node.links)), true)
+  assert.equal(context.data.nodes.every(node => ['stone', 'grass'].includes(node.surface)), true)
   assert.equal(context.data.anchors.every(anchor => anchor.home && anchor.route.length >= 3), true)
   assert.equal(context.data.anchors.every(anchor => anchor.route.every(id => ids.has(id))), true)
+  assert.equal(
+    context.data.anchors.every(anchor => anchor.route.some(id => byId.get(id)?.y > 1200)),
+    true,
+    'every citizen should eventually visit the lower bazaar'
+  )
 })
 
 test('every roaming segment follows a declared environment edge', () => {
@@ -197,10 +233,33 @@ test('world geometry marks buildings monuments ornaments and safe ground separat
   const { geometry } = context
 
   assert.ok(geometry.walkable.length >= 4)
+  assert.equal(geometry.walkable.every(area => ['stone', 'grass'].includes(area.surface)), true)
   assert.ok(geometry.obstacles.some(area => area.kind === 'building'))
   assert.ok(geometry.obstacles.some(area => area.kind === 'monument'))
   assert.ok(geometry.obstacles.some(area => area.kind === 'ornament'))
+  assert.ok(geometry.obstacles.some(area => area.kind === 'fence'))
+  assert.ok(geometry.obstacles.some(area => area.kind === 'stall'))
+  assert.ok(geometry.obstacles.some(area => area.kind === 'crate'))
   assert.ok(geometry.occluders.some(area => area.kind === 'canopy'))
+})
+
+test('lower bazaar walking rejects fences stalls crates and objects', () => {
+  const { worldPointAllowed } = load(
+    ['rectsOverlap', 'worldPointAllowed'],
+    ['CANONICAL_WORLD_GEOMETRY', 'CITIZEN_CLEARANCE']
+  )
+  const blocked = [
+    [300, 956],
+    [710, 1070],
+    [650, 1200],
+    [500, 1330],
+    [370, 1475],
+    [610, 1490]
+  ]
+  for (const point of blocked) assert.equal(worldPointAllowed(...point), false, `blocked lower-bazaar point ${point}`)
+
+  const safe = [[500, 900], [505, 1050], [500, 1160], [438, 1320], [350, 1380], [300, 1530], [500, 1660]]
+  for (const point of safe) assert.equal(worldPointAllowed(...point), true, `safe stone/grass point ${point}`)
 })
 
 test('circled roof and ornament overlap positions are rejected', () => {
@@ -226,9 +285,12 @@ test('authored roaming edges keep character feet on safe geometry', () => {
     for (let index = 0; index < anchor.route.length; index += 1) {
       const from = byId.get(anchor.route[index])
       const to = byId.get(anchor.route[(index + 1) % anchor.route.length])
-      for (let step = 0; step <= 20; step += 1) {
-        const progress = step / 20
-        assert.equal(worldPointAllowed(from.x + (to.x - from.x) * progress, from.y + (to.y - from.y) * progress), true, `${anchor.name}: ${from.id} -> ${to.id}`)
+      const steps = Math.max(20, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / 2))
+      for (let step = 0; step <= steps; step += 1) {
+        const progress = step / steps
+        const x = from.x + (to.x - from.x) * progress
+        const y = from.y + (to.y - from.y) * progress
+        assert.equal(worldPointAllowed(x, y), true, `${anchor.name}: ${from.id} -> ${to.id} at ${x.toFixed(1)},${y.toFixed(1)}`)
       }
     }
   }

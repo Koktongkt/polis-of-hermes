@@ -32,42 +32,82 @@ let pluginContext = null
 
 // Approved production LPC community runtime.
 const CANONICAL_CITIZEN_ANCHORS = [
-  { name: 'default', x: 414, y: 190, home: 'agora-dais', route: ['agora-dais', 'agora-pause', 'agora-view', 'agora-pause'] },
-  { name: 'aivory', x: 272, y: 508, home: 'mouseion-steps', route: ['mouseion-steps', 'mouseion-path', 'lower-crossing', 'mouseion-path'] },
-  { name: 'cody', x: 784, y: 300, home: 'forge-yard', route: ['forge-yard', 'forge-turn', 'forge-overlook', 'forge-turn'] },
-  { name: 'alpha_sage', x: 330, y: 758, home: 'stoa-ledger', route: ['stoa-ledger', 'stoa-turn', 'bazaar-rest', 'stoa-turn'] }
+  { name: 'default', x: 414, y: 190, home: 'agora-dais', route: ['agora-dais', 'agora-pause', 'agora-view', 'agora-pause', 'agora-dais', 'agora-east', 'agora-south', 'central-gap-approach', 'central-gap', 'central-stones', 'lower-crossing', 'stoa-turn', 'south-green', 'gate-approach', 'fence-gate', 'bazaar-entry', 'bazaar-neck', 'bazaar-west-gap', 'bazaar-west-aisle', 'bazaar-west-lower', 'bazaar-southwest', 'bazaar-south-gate', 'bazaar-southwest', 'bazaar-west-lower', 'bazaar-west-aisle', 'bazaar-west-gap', 'bazaar-neck', 'bazaar-entry', 'fence-gate', 'gate-approach', 'south-green', 'stoa-turn', 'lower-crossing', 'central-stones', 'central-gap', 'central-gap-approach', 'agora-south', 'agora-east'] },
+  { name: 'aivory', x: 272, y: 508, home: 'mouseion-steps', route: ['mouseion-steps', 'mouseion-path', 'lower-crossing', 'stoa-turn', 'south-green', 'gate-approach', 'fence-gate', 'bazaar-entry', 'bazaar-neck', 'bazaar-west-gap', 'bazaar-west-aisle', 'bazaar-west-lower', 'bazaar-southwest', 'bazaar-south-gate', 'bazaar-southwest', 'bazaar-west-lower', 'bazaar-west-aisle', 'bazaar-west-gap', 'bazaar-neck', 'bazaar-entry', 'fence-gate', 'gate-approach', 'south-green', 'stoa-turn', 'lower-crossing', 'mouseion-path'] },
+  { name: 'cody', x: 784, y: 300, home: 'forge-yard', route: ['forge-yard', 'forge-turn', 'forge-overlook', 'forge-turn', 'forge-yard', 'forge-west', 'agora-south', 'central-gap-approach', 'central-gap', 'central-stones', 'lower-crossing', 'stoa-turn', 'south-green', 'gate-approach', 'fence-gate', 'bazaar-entry', 'bazaar-neck', 'bazaar-west-gap', 'bazaar-west-aisle', 'bazaar-west-lower', 'bazaar-southwest', 'bazaar-south-gate', 'bazaar-southwest', 'bazaar-west-lower', 'bazaar-west-aisle', 'bazaar-west-gap', 'bazaar-neck', 'bazaar-entry', 'fence-gate', 'gate-approach', 'south-green', 'stoa-turn', 'lower-crossing', 'central-stones', 'central-gap', 'central-gap-approach', 'agora-south', 'forge-west'] },
+  { name: 'alpha_sage', x: 330, y: 758, home: 'stoa-ledger', route: ['stoa-ledger', 'stoa-turn', 'south-green', 'gate-approach', 'fence-gate', 'bazaar-entry', 'bazaar-neck', 'bazaar-west-gap', 'bazaar-west-aisle', 'bazaar-west-lower', 'bazaar-southwest', 'bazaar-south-gate', 'bazaar-southwest', 'bazaar-west-lower', 'bazaar-west-aisle', 'bazaar-west-gap', 'bazaar-neck', 'bazaar-entry', 'fence-gate', 'gate-approach', 'south-green', 'stoa-turn'] }
 ]
 const CANONICAL_NAV_NODES = [
-  { id: 'agora-dais', x: 414, y: 190, kind: 'workplace', facing: 'south', links: ['agora-pause'] },
-  { id: 'agora-pause', x: 430, y: 185, kind: 'road', facing: 'east', links: ['agora-dais', 'agora-view'] },
-  { id: 'agora-view', x: 446, y: 195, kind: 'viewpoint', facing: 'south', links: ['agora-pause'] },
-  { id: 'mouseion-steps', x: 272, y: 508, kind: 'doorway', facing: 'north', links: ['mouseion-path'] },
-  { id: 'mouseion-path', x: 302, y: 548, kind: 'road', facing: 'south', links: ['mouseion-steps', 'lower-crossing'] },
-  { id: 'lower-crossing', x: 338, y: 590, kind: 'crossroads', facing: 'south', links: ['mouseion-path'] },
-  { id: 'forge-yard', x: 784, y: 300, kind: 'workplace', facing: 'south', links: ['forge-turn'] },
-  { id: 'forge-turn', x: 820, y: 270, kind: 'road', facing: 'east', links: ['forge-yard', 'forge-overlook'] },
-  { id: 'forge-overlook', x: 860, y: 292, kind: 'viewpoint', facing: 'south', links: ['forge-turn'] },
-  { id: 'stoa-ledger', x: 330, y: 758, kind: 'market-station', facing: 'north', links: ['stoa-turn'] },
-  { id: 'stoa-turn', x: 358, y: 735, kind: 'plaza', facing: 'north', links: ['stoa-ledger', 'bazaar-rest'] },
-  { id: 'bazaar-rest', x: 404, y: 710, kind: 'market', facing: 'east', links: ['stoa-turn'] }
+  { id: 'agora-dais', x: 414, y: 190, kind: 'workplace', surface: 'stone', facing: 'south', links: ['agora-pause', 'agora-east'] },
+  { id: 'agora-pause', x: 430, y: 185, kind: 'road', surface: 'stone', facing: 'east', links: ['agora-dais', 'agora-view'] },
+  { id: 'agora-view', x: 446, y: 195, kind: 'viewpoint', surface: 'stone', facing: 'south', links: ['agora-pause'] },
+  { id: 'mouseion-steps', x: 272, y: 508, kind: 'doorway', surface: 'stone', facing: 'north', links: ['mouseion-path'] },
+  { id: 'mouseion-path', x: 302, y: 548, kind: 'road', surface: 'stone', facing: 'south', links: ['mouseion-steps', 'lower-crossing'] },
+  { id: 'lower-crossing', x: 338, y: 590, kind: 'crossroads', surface: 'stone', facing: 'south', links: ['mouseion-path', 'central-stones', 'stoa-turn'] },
+  { id: 'agora-east', x: 485, y: 190, kind: 'road', surface: 'stone', facing: 'east', links: ['agora-dais', 'agora-south'] },
+  { id: 'agora-south', x: 485, y: 285, kind: 'road', surface: 'stone', facing: 'west', links: ['agora-east', 'central-gap-approach', 'forge-west'] },
+  { id: 'central-gap-approach', x: 450, y: 285, kind: 'road', surface: 'stone', facing: 'south', links: ['agora-south', 'central-gap'] },
+  { id: 'central-gap', x: 450, y: 420, kind: 'road', surface: 'stone', facing: 'south', links: ['central-gap-approach', 'central-stones'] },
+  { id: 'central-stones', x: 390, y: 470, kind: 'road', surface: 'stone', facing: 'south', links: ['central-gap', 'lower-crossing'] },
+  { id: 'forge-yard', x: 784, y: 300, kind: 'workplace', surface: 'stone', facing: 'south', links: ['forge-turn', 'forge-west'] },
+  { id: 'forge-turn', x: 820, y: 270, kind: 'road', surface: 'stone', facing: 'east', links: ['forge-yard', 'forge-overlook'] },
+  { id: 'forge-overlook', x: 860, y: 292, kind: 'viewpoint', surface: 'stone', facing: 'south', links: ['forge-turn'] },
+  { id: 'forge-west', x: 585, y: 285, kind: 'road', surface: 'stone', facing: 'west', links: ['forge-yard', 'agora-south'] },
+  { id: 'stoa-ledger', x: 330, y: 758, kind: 'market-station', surface: 'stone', facing: 'north', links: ['stoa-turn'] },
+  { id: 'stoa-turn', x: 380, y: 735, kind: 'plaza', surface: 'stone', facing: 'south', links: ['stoa-ledger', 'lower-crossing', 'south-green'] },
+  { id: 'south-green', x: 450, y: 870, kind: 'grass-path', surface: 'grass', facing: 'east', links: ['stoa-turn', 'gate-approach'] },
+  { id: 'gate-approach', x: 505, y: 880, kind: 'grass-path', surface: 'grass', facing: 'south', links: ['south-green', 'fence-gate'] },
+  { id: 'fence-gate', x: 505, y: 1015, kind: 'gate', surface: 'grass', facing: 'south', links: ['gate-approach', 'bazaar-entry'] },
+  { id: 'bazaar-entry', x: 500, y: 1160, kind: 'stone-path', surface: 'stone', facing: 'south', links: ['fence-gate', 'bazaar-neck'] },
+  { id: 'bazaar-neck', x: 438, y: 1210, kind: 'stone-path', surface: 'stone', facing: 'south', links: ['bazaar-entry', 'bazaar-west-gap'] },
+  { id: 'bazaar-west-gap', x: 438, y: 1320, kind: 'stone-path', surface: 'stone', facing: 'south', links: ['bazaar-neck', 'bazaar-west-aisle'] },
+  { id: 'bazaar-west-aisle', x: 350, y: 1380, kind: 'stone-path', surface: 'stone', facing: 'south', links: ['bazaar-west-gap', 'bazaar-west-lower'] },
+  { id: 'bazaar-west-lower', x: 442, y: 1430, kind: 'stone-gap', surface: 'stone', facing: 'south', links: ['bazaar-west-aisle', 'bazaar-southwest'] },
+  { id: 'bazaar-southwest', x: 442, y: 1460, kind: 'stone-path', surface: 'stone', facing: 'south', links: ['bazaar-west-lower', 'bazaar-south-gate'] },
+  { id: 'bazaar-south-gate', x: 500, y: 1660, kind: 'lower-market', surface: 'stone', facing: 'south', links: ['bazaar-southwest'] }
 ]
-const CITIZEN_CLEARANCE = { footRadius: 12 }
+const CITIZEN_CLEARANCE = { footRadius: 7 }
 const CANONICAL_WORLD_GEOMETRY = {
   walkable: [
-    { id: 'agora-pocket', x: 395, y: 165, w: 70, h: 45, kind: 'road' },
-    { id: 'mouseion-lane', x: 250, y: 480, w: 115, h: 135, kind: 'road' },
-    { id: 'forge-yard', x: 750, y: 245, w: 135, h: 70, kind: 'road' },
-    { id: 'stoa-plaza', x: 300, y: 690, w: 130, h: 80, kind: 'plaza' }
+    { id: 'agora-pocket', x: 390, y: 160, w: 110, h: 140, surface: 'stone' },
+    { id: 'central-stone-path', x: 320, y: 275, w: 285, h: 475, surface: 'stone' },
+    { id: 'mouseion-lane', x: 250, y: 480, w: 130, h: 150, surface: 'stone' },
+    { id: 'forge-yard', x: 560, y: 260, w: 325, h: 60, surface: 'stone' },
+    { id: 'stoa-plaza', x: 300, y: 680, w: 155, h: 105, surface: 'stone' },
+    { id: 'south-grass-link', x: 350, y: 760, w: 215, h: 335, surface: 'grass' },
+    { id: 'bazaar-entry-stones', x: 425, y: 1080, w: 140, h: 260, surface: 'stone' },
+    { id: 'bazaar-west-aisle', x: 255, y: 1300, w: 195, h: 155, surface: 'stone' },
+    { id: 'bazaar-central-gap', x: 435, y: 1415, w: 35, h: 105, surface: 'stone' },
+    { id: 'bazaar-west-lower', x: 250, y: 1370, w: 120, h: 270, surface: 'stone' },
+    { id: 'bazaar-south-stones', x: 280, y: 1510, w: 240, h: 180, surface: 'stone' }
   ],
   obstacles: [
     { id: 'west-house', x: 130, y: 80, w: 235, h: 295, kind: 'building' },
-    { id: 'west-barrel-crates', x: 352, y: 200, w: 75, h: 205, kind: 'ornament', sideClearance: 52 },
+    { id: 'west-barrel-crates', x: 352, y: 200, w: 75, h: 205, kind: 'ornament', sideClearance: 10 },
+    { id: 'west-barrel-overhang', x: 460, y: 305, w: 20, h: 55, kind: 'ornament' },
     { id: 'north-crates', x: 525, y: 85, w: 290, h: 170, kind: 'ornament' },
     { id: 'east-house', x: 580, y: 315, w: 290, h: 345, kind: 'building' },
     { id: 'west-produce-stall', x: 75, y: 500, w: 175, h: 170, kind: 'ornament', sideClearance: 18 },
-    { id: 'central-produce', x: 470, y: 400, w: 115, h: 145, kind: 'ornament', sideClearance: 36 },
+    { id: 'central-produce', x: 470, y: 400, w: 115, h: 145, kind: 'ornament', sideClearance: 8 },
     { id: 'central-pottery', x: 480, y: 525, w: 150, h: 155, kind: 'monument', sideClearance: 36 },
-    { id: 'east-barrels', x: 865, y: 475, w: 115, h: 155, kind: 'ornament', sideClearance: 28 }
+    { id: 'east-barrels', x: 865, y: 475, w: 115, h: 155, kind: 'ornament', sideClearance: 28 },
+    { id: 'bazaar-northwest-fence', x: 155, y: 940, w: 320, h: 25, kind: 'fence' },
+    { id: 'bazaar-northeast-fence', x: 545, y: 940, w: 255, h: 25, kind: 'fence' },
+    { id: 'bazaar-fence-barrels', x: 195, y: 900, w: 285, h: 90, kind: 'ornament' },
+    { id: 'bazaar-north-crates', x: 575, y: 1010, w: 190, h: 105, kind: 'crate' },
+    { id: 'bazaar-wagon-stall', x: 145, y: 1065, w: 190, h: 190, kind: 'stall' },
+    { id: 'bazaar-striped-stall', x: 330, y: 1105, w: 100, h: 210, kind: 'stall' },
+    { id: 'bazaar-awning-stall', x: 570, y: 1105, w: 210, h: 225, kind: 'stall' },
+    { id: 'bazaar-meat-stall', x: 135, y: 1245, w: 155, h: 235, kind: 'stall' },
+    { id: 'bazaar-fountain', x: 450, y: 1210, w: 125, h: 230, kind: 'monument' },
+    { id: 'bazaar-east-stall', x: 760, y: 1240, w: 160, h: 225, kind: 'stall' },
+    { id: 'bazaar-pumpkins', x: 705, y: 1290, w: 85, h: 130, kind: 'ornament' },
+    { id: 'bazaar-produce-counter', x: 285, y: 1435, w: 150, h: 85, kind: 'stall' },
+    { id: 'bazaar-center-table', x: 545, y: 1420, w: 140, h: 135, kind: 'ornament' },
+    { id: 'bazaar-benches', x: 330, y: 1535, w: 110, h: 85, kind: 'ornament' },
+    { id: 'bazaar-signpost', x: 715, y: 1500, w: 65, h: 135, kind: 'ornament' },
+    { id: 'bazaar-west-cart', x: 85, y: 1535, w: 170, h: 120, kind: 'ornament' },
+    { id: 'bazaar-south-stall', x: 235, y: 1635, w: 140, h: 85, kind: 'stall' }
   ],
   occluders: [
     { id: 'west-house-roof', x: 130, y: 80, w: 235, h: 130, kind: 'awning' },
@@ -459,14 +499,19 @@ function worldPointAllowed(x, y) {
 
 function citizenMotionAt(profile, anchor, time) {
   const home = CANONICAL_NAV_NODES.find(node => node.id === anchor.home) || { ...anchor, id: anchor.home, kind: 'station' }
-  if (!['idle', 'recent'].includes(profile.status)) return { ...home, mode: 'stationed', station: home, facing: home.facing || 'south' }
+  const isWorkingOrchestrator = profile.name === 'default' && profile.status === 'working'
+  if (!['idle', 'recent'].includes(profile.status) && !isWorkingOrchestrator) {
+    return { ...home, mode: 'stationed', station: home, facing: home.facing || 'south' }
+  }
   const route = anchor.route.map(id => CANONICAL_NAV_NODES.find(node => node.id === id)).filter(Boolean)
   if (route.length < 2) return { ...home, mode: 'stationed', station: home, facing: home.facing || 'south' }
   const seed = profileSeed(profile.name)
-  const dwellMs = 20_000 + (seed % 14_000)
+  const dwellMs = 8_000 + (seed % 6_000)
   const travelMs = 5_000 + (seed % 2_500)
   const cycleMs = dwellMs + travelMs
-  const clock = Math.max(0, Number(time) || 0) + (seed % cycleMs)
+  const routeDuration = cycleMs * route.length
+  const phaseOffset = (seed * 977) % routeDuration
+  const clock = Math.max(0, Number(time) || 0) + phaseOffset
   const leg = Math.floor(clock / cycleMs) % route.length
   const elapsed = clock % cycleMs
   const from = route[leg]

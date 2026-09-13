@@ -8,7 +8,7 @@ A living ancient-Greek control surface for [Hermes Desktop](https://github.com/N
 - One persistent citizen per Hermes profile
 - Configurable occupations: herald, blacksmith, scholar, merchant, warrior, and scribe
 - Profile-specific frame-by-frame LPC character animation atlases
-- Environment-aware ambient roaming between authored roads, workplaces, doors, gardens, gates, and market stations
+- Environment-aware ambient roaming from upper workplaces through the lower bazaar on authored stone and grass routes
 - Realistic dwell-first behavior: citizens spend most of their time stationed and occasionally take a short purposeful walk
 - Toggleable world-geometry overlay showing walkable ground, blocked buildings/ornaments, occlusion areas, routes, and stations
 - Occupation-specific idle, working, and waiting loops
@@ -77,7 +77,7 @@ Like Hermes Pet reactions, live profile state selects a distinct action while
 deterministic per-profile timing prevents all citizens from animating in sync.
 Idle citizens also occasionally gesture while dwelling at a station.
 
-Idle and recently active citizens may roam along conservative, authored navigation edges. Working, waiting, failed, and offline citizens remain at their home environment object so ambient movement never obscures real agent state. Citizen drawing, depth order, selection, and hit testing all use the same live foot position.
+Idle and recently active citizens may roam along conservative, authored navigation edges that connect every upper workplace to the lower bazaar. The working `default` orchestrator also patrols the full route, so the profile that is normally active is not permanently pinned to the upper layout. Routes use only labelled stone tiles and grass patches; footprint collision bounds exclude fences, stalls, crates, carts, tables, monuments, and ornaments. Other working citizens—and all waiting, failed, and offline citizens—remain at their home environment object so ambient movement never obscures real agent state. Citizen drawing, depth order, selection, and hit testing all use the same live foot position.
 
 Use **World geometry** in the Polis header to inspect the authored map: green areas are safe ground, red areas block character feet, purple areas mark visual occlusion, blue lines are approved routes, and yellow points are semantic stations. Collision tests the citizen's feet rather than the full sprite, allowing natural visual overlap without walking through buildings, monuments, stalls, or ornaments.
 
