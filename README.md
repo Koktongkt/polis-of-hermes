@@ -8,6 +8,9 @@ A living ancient-Greek control surface for [Hermes Desktop](https://github.com/N
 - One persistent citizen per Hermes profile
 - Configurable occupations: herald, blacksmith, scholar, merchant, warrior, and scribe
 - Profile-specific frame-by-frame LPC character animation atlases
+- Environment-aware ambient roaming between authored roads, workplaces, doors, gardens, gates, and market stations
+- Realistic dwell-first behavior: citizens spend most of their time stationed and occasionally take a short purposeful walk
+- Toggleable world-geometry overlay showing walkable ground, blocked buildings/ornaments, occlusion areas, routes, and stations
 - Occupation-specific idle, working, and waiting loops
 - Live gateway-driven working, waiting, completion, failure, recent, idle, and offline states
 - Concurrent-session activity cues and one-hour activity history
@@ -64,6 +67,10 @@ Each occupation atlas contains a 4×3 frame grid:
 | 3 | Waiting | Attention and inspection gestures |
 
 The live profile state selects a row, while deterministic per-profile timing prevents all citizens from animating in sync.
+
+Idle and recently active citizens may roam along conservative, authored navigation edges. Working, waiting, failed, and offline citizens remain at their home environment object so ambient movement never obscures real agent state. Citizen drawing, depth order, selection, and hit testing all use the same live foot position.
+
+Use **World geometry** in the Polis header to inspect the authored map: green areas are safe ground, red areas block character feet, purple areas mark visual occlusion, blue lines are approved routes, and yellow points are semantic stations. Collision tests the citizen's feet rather than the full sprite, allowing natural visual overlap without walking through buildings, monuments, stalls, or ornaments.
 
 Each citizen's identity is profile-based and independent from the occupation
 selector. The 64×64 LPC cells use nearest-neighbour rendering to preserve pixel

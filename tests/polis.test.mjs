@@ -19,9 +19,17 @@ function declaration(name) {
 }
 
 function constant(name) {
-  const match = source.match(new RegExp(`const\\s+${name}\\s*=\\s*([\\s\\S]*?)\\n\\]`))
-  if (!match) throw new Error(`Missing production constant: ${name}`)
-  return `const ${name} = ${match[1]}\n]`
+  const start = source.search(new RegExp(`const\\s+${name}\\s*=`))
+  if (start < 0) throw new Error(`Missing production constant: ${name}`)
+  const open = source.slice(start).search(/[\[{]/) + start
+  const pairs = { '[': ']', '{': '}' }
+  const stack = []
+  for (let index = open; index < source.length; index += 1) {
+    if (pairs[source[index]]) stack.push(pairs[source[index]])
+    else if (source[index] === stack.at(-1)) stack.pop()
+    if (!stack.length) return source.slice(start, index + 1)
+  }
+  throw new Error(`Unterminated production constant: ${name}`)
 }
 
 function load(names, constants = []) {
@@ -74,6 +82,115 @@ test('canonical community assigns detached citizens to approved native-image foo
     ]
   )
   assert.equal(entries.every(entry => entry.scale === 2), true)
+})
+
+test('ambient citizens alternate between meaningful stations and safe authored travel edges', () => {
+  const { citizenMotionAt, buildCanonicalSceneEntries, profileSeed } = load(
+    ['profileSeed', 'rectsOverlap', 'worldPointAllowed', 'citizenMotionAt', 'buildCanonicalSceneEntries'],
+    ['CANONICAL_CITIZEN_ANCHORS', 'CANONICAL_NAV_NODES', 'CITIZEN_CLEARANCE', 'CANONICAL_WORLD_GEOMETRY']
+  )
+  const [entry] = buildCanonicalSceneEntries([{ name: 'default', status: 'idle' }])
+  const samples = Array.from({ length: 241 }, (_, index) => citizenMotionAt(entry.profile, entry.anchor, index * 500))
+  const stationed = samples.find(sample => sample.mode === 'stationed')
+  const roaming = samples.find(sample => sample.mode === 'roaming')
+
+  assert.ok(stationed, 'citizen should spend time stationed in the environment')
+  assert.ok(roaming, 'citizen should occasionally roam')
+  assert.ok(stationed.station?.kind, 'stations should describe the environment object or place')
+  assert.ok(roaming.from?.links.includes(roaming.to.id), 'roaming must follow an authored safe edge')
+  assert.ok(roaming.progress > 0 && roaming.progress < 1)
+  assert.equal(Number.isInteger(profileSeed('default')), true)
+})
+
+test('working and attention states keep citizens stationed at their home environment object', () => {
+  const { citizenMotionAt, buildCanonicalSceneEntries } = load(
+    ['profileSeed', 'citizenMotionAt', 'buildCanonicalSceneEntries'],
+    ['CANONICAL_CITIZEN_ANCHORS', 'CANONICAL_NAV_NODES']
+  )
+  for (const status of ['working', 'waiting', 'failed']) {
+    const [entry] = buildCanonicalSceneEntries([{ name: 'default', status }])
+    const motion = citizenMotionAt(entry.profile, entry.anchor, 93_000)
+    assert.equal(motion.mode, 'stationed')
+    assert.deepEqual([motion.x, motion.y], [entry.anchor.x, entry.anchor.y])
+    assert.equal(motion.station.id, entry.anchor.home)
+  }
+})
+
+test('citizen routes reference real semantic navigation nodes', () => {
+  const anchorsSource = constant('CANONICAL_CITIZEN_ANCHORS')
+  const nodesSource = constant('CANONICAL_NAV_NODES')
+  const context = vm.createContext({})
+  vm.runInContext(`${anchorsSource}\n${nodesSource}\nglobalThis.data = { anchors: CANONICAL_CITIZEN_ANCHORS, nodes: CANONICAL_NAV_NODES }`, context)
+  const ids = new Set(context.data.nodes.map(node => node.id))
+
+  assert.equal(context.data.nodes.every(node => node.kind && Array.isArray(node.links)), true)
+  assert.equal(context.data.anchors.every(anchor => anchor.home && anchor.route.length >= 3), true)
+  assert.equal(context.data.anchors.every(anchor => anchor.route.every(id => ids.has(id))), true)
+})
+
+test('every roaming segment follows a declared environment edge', () => {
+  const { citizenMotionAt, buildCanonicalSceneEntries } = load(
+    ['profileSeed', 'rectsOverlap', 'worldPointAllowed', 'citizenMotionAt', 'buildCanonicalSceneEntries'],
+    ['CANONICAL_CITIZEN_ANCHORS', 'CANONICAL_NAV_NODES', 'CITIZEN_CLEARANCE', 'CANONICAL_WORLD_GEOMETRY']
+  )
+  const profiles = ['default', 'aivory', 'cody', 'alpha_sage'].map(name => ({ name, status: 'idle' }))
+  const entries = buildCanonicalSceneEntries(profiles)
+
+  for (const entry of entries) {
+    for (let time = 0; time <= 240_000; time += 250) {
+      const motion = citizenMotionAt(entry.profile, entry.anchor, time)
+      if (motion.mode === 'roaming') assert.ok(motion.from.links.includes(motion.to.id), `${entry.profile.name}: ${motion.from.id} -> ${motion.to.id}`)
+    }
+  }
+})
+
+test('world geometry marks buildings monuments ornaments and safe ground separately', () => {
+  const context = vm.createContext({})
+  vm.runInContext(`${constant('CANONICAL_WORLD_GEOMETRY')}\nglobalThis.geometry = CANONICAL_WORLD_GEOMETRY`, context)
+  const { geometry } = context
+
+  assert.ok(geometry.walkable.length >= 4)
+  assert.ok(geometry.obstacles.some(area => area.kind === 'building'))
+  assert.ok(geometry.obstacles.some(area => area.kind === 'monument'))
+  assert.ok(geometry.obstacles.some(area => area.kind === 'ornament'))
+  assert.ok(geometry.occluders.some(area => area.kind === 'canopy'))
+})
+
+test('circled roof and ornament overlap positions are rejected', () => {
+  const { worldPointAllowed } = load(
+    ['rectsOverlap', 'worldPointAllowed'],
+    ['CANONICAL_WORLD_GEOMETRY', 'CITIZEN_CLEARANCE']
+  )
+
+  assert.equal(worldPointAllowed(470, 330), false, 'upper crossing overlaps the barrel and crate stack')
+  assert.equal(worldPointAllowed(700, 350), false, 'east road is on the large building roof')
+})
+
+test('authored roaming edges keep character feet on safe geometry', () => {
+  const { worldPointAllowed } = load(
+    ['rectsOverlap', 'worldPointAllowed'],
+    ['CITIZEN_CLEARANCE', 'CANONICAL_WORLD_GEOMETRY']
+  )
+  const context = vm.createContext({})
+  vm.runInContext(`${constant('CANONICAL_CITIZEN_ANCHORS')}\n${constant('CANONICAL_NAV_NODES')}\nglobalThis.data = { anchors: CANONICAL_CITIZEN_ANCHORS, nodes: CANONICAL_NAV_NODES }`, context)
+  const byId = new Map(context.data.nodes.map(node => [node.id, node]))
+
+  for (const anchor of context.data.anchors) {
+    for (let index = 0; index < anchor.route.length; index += 1) {
+      const from = byId.get(anchor.route[index])
+      const to = byId.get(anchor.route[(index + 1) % anchor.route.length])
+      for (let step = 0; step <= 20; step += 1) {
+        const progress = step / 20
+        assert.equal(worldPointAllowed(from.x + (to.x - from.x) * progress, from.y + (to.y - from.y) * progress), true, `${anchor.name}: ${from.id} -> ${to.id}`)
+      }
+    }
+  }
+})
+
+test('Polis exposes a user-toggleable world geometry overlay', () => {
+  assert.match(source, /showGeometry/)
+  assert.match(source, /World geometry/)
+  assert.match(source, /drawWorldGeometryOverlay/)
 })
 
 test('canonical community is the only renderer and loads only current art', () => {

@@ -32,11 +32,50 @@ let pluginContext = null
 
 // Approved production LPC community runtime.
 const CANONICAL_CITIZEN_ANCHORS = [
-  { name: 'default', x: 414, y: 190 },
-  { name: 'aivory', x: 272, y: 508 },
-  { name: 'cody', x: 784, y: 300 },
-  { name: 'alpha_sage', x: 330, y: 758 }
+  { name: 'default', x: 414, y: 190, home: 'agora-dais', route: ['agora-dais', 'agora-pause', 'agora-view', 'agora-pause'] },
+  { name: 'aivory', x: 272, y: 508, home: 'mouseion-steps', route: ['mouseion-steps', 'mouseion-path', 'lower-crossing', 'mouseion-path'] },
+  { name: 'cody', x: 784, y: 300, home: 'forge-yard', route: ['forge-yard', 'forge-turn', 'forge-overlook', 'forge-turn'] },
+  { name: 'alpha_sage', x: 330, y: 758, home: 'stoa-ledger', route: ['stoa-ledger', 'stoa-turn', 'bazaar-rest', 'stoa-turn'] }
 ]
+const CANONICAL_NAV_NODES = [
+  { id: 'agora-dais', x: 414, y: 190, kind: 'workplace', facing: 'south', links: ['agora-pause'] },
+  { id: 'agora-pause', x: 430, y: 185, kind: 'road', facing: 'east', links: ['agora-dais', 'agora-view'] },
+  { id: 'agora-view', x: 446, y: 195, kind: 'viewpoint', facing: 'south', links: ['agora-pause'] },
+  { id: 'mouseion-steps', x: 272, y: 508, kind: 'doorway', facing: 'north', links: ['mouseion-path'] },
+  { id: 'mouseion-path', x: 302, y: 548, kind: 'road', facing: 'south', links: ['mouseion-steps', 'lower-crossing'] },
+  { id: 'lower-crossing', x: 338, y: 590, kind: 'crossroads', facing: 'south', links: ['mouseion-path'] },
+  { id: 'forge-yard', x: 784, y: 300, kind: 'workplace', facing: 'south', links: ['forge-turn'] },
+  { id: 'forge-turn', x: 820, y: 270, kind: 'road', facing: 'east', links: ['forge-yard', 'forge-overlook'] },
+  { id: 'forge-overlook', x: 860, y: 292, kind: 'viewpoint', facing: 'south', links: ['forge-turn'] },
+  { id: 'stoa-ledger', x: 330, y: 758, kind: 'market-station', facing: 'north', links: ['stoa-turn'] },
+  { id: 'stoa-turn', x: 358, y: 735, kind: 'plaza', facing: 'north', links: ['stoa-ledger', 'bazaar-rest'] },
+  { id: 'bazaar-rest', x: 404, y: 710, kind: 'market', facing: 'east', links: ['stoa-turn'] }
+]
+const CITIZEN_CLEARANCE = { footRadius: 12 }
+const CANONICAL_WORLD_GEOMETRY = {
+  walkable: [
+    { id: 'agora-pocket', x: 395, y: 165, w: 70, h: 45, kind: 'road' },
+    { id: 'mouseion-lane', x: 250, y: 480, w: 115, h: 135, kind: 'road' },
+    { id: 'forge-yard', x: 750, y: 245, w: 135, h: 70, kind: 'road' },
+    { id: 'stoa-plaza', x: 300, y: 690, w: 130, h: 80, kind: 'plaza' }
+  ],
+  obstacles: [
+    { id: 'west-house', x: 130, y: 80, w: 235, h: 295, kind: 'building' },
+    { id: 'west-barrel-crates', x: 352, y: 200, w: 75, h: 205, kind: 'ornament', sideClearance: 52 },
+    { id: 'north-crates', x: 525, y: 85, w: 290, h: 170, kind: 'ornament' },
+    { id: 'east-house', x: 580, y: 315, w: 290, h: 345, kind: 'building' },
+    { id: 'west-produce-stall', x: 75, y: 500, w: 175, h: 170, kind: 'ornament', sideClearance: 18 },
+    { id: 'central-produce', x: 470, y: 400, w: 115, h: 145, kind: 'ornament', sideClearance: 36 },
+    { id: 'central-pottery', x: 480, y: 525, w: 150, h: 155, kind: 'monument', sideClearance: 36 },
+    { id: 'east-barrels', x: 865, y: 475, w: 115, h: 155, kind: 'ornament', sideClearance: 28 }
+  ],
+  occluders: [
+    { id: 'west-house-roof', x: 130, y: 80, w: 235, h: 130, kind: 'awning' },
+    { id: 'east-house-roof', x: 580, y: 315, w: 290, h: 180, kind: 'awning' },
+    { id: 'northwest-tree-canopy', x: 0, y: 0, w: 130, h: 460, kind: 'canopy' },
+    { id: 'northeast-tree-canopy', x: 900, y: 0, w: 101, h: 470, kind: 'canopy' }
+  ]
+}
 const CURRENT_CITIZENS = {
   default: { key: 'lpcHermes', label: 'Hermes' },
   aivory: { key: 'lpcAivory', label: 'Aivory' },
@@ -378,8 +417,103 @@ function buildCanonicalSceneEntries(profiles) {
   }).filter(Boolean)
 }
 
+function profileSeed(name) {
+  return [...String(name || '')].reduce((sum, char) => ((sum * 31) + char.charCodeAt(0)) >>> 0, 2166136261)
+}
 
-function drawCanonicalCommunity(ctx, canvas, profiles, selectedName, p, t, hitMap, characterHitMap, art) {
+function rectsOverlap(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
+}
+
+function worldPointAllowed(x, y) {
+  const point = { x, y, w: 0, h: 0 }
+  const onSafeGround = CANONICAL_WORLD_GEOMETRY.walkable.some(area => (
+    x >= area.x && x <= area.x + area.w && y >= area.y && y <= area.y + area.h
+  ))
+  const foot = {
+    x: x - CITIZEN_CLEARANCE.footRadius,
+    y: y - CITIZEN_CLEARANCE.footRadius / 2,
+    w: CITIZEN_CLEARANCE.footRadius * 2,
+    h: CITIZEN_CLEARANCE.footRadius
+  }
+  const hitsObstacle = CANONICAL_WORLD_GEOMETRY.obstacles.some(area => rectsOverlap(foot, area))
+  const lacksSideClearance = CANONICAL_WORLD_GEOMETRY.obstacles.some(area => (
+    area.sideClearance
+    && point.y >= area.y
+    && point.y <= area.y + area.h
+    && point.x >= area.x - area.sideClearance
+    && point.x <= area.x + area.w + area.sideClearance
+  ))
+  return onSafeGround && !hitsObstacle && !lacksSideClearance
+}
+
+function citizenMotionAt(profile, anchor, time) {
+  const home = CANONICAL_NAV_NODES.find(node => node.id === anchor.home) || { ...anchor, id: anchor.home, kind: 'station' }
+  if (!['idle', 'recent'].includes(profile.status)) return { ...home, mode: 'stationed', station: home, facing: home.facing || 'south' }
+  const route = anchor.route.map(id => CANONICAL_NAV_NODES.find(node => node.id === id)).filter(Boolean)
+  if (route.length < 2) return { ...home, mode: 'stationed', station: home, facing: home.facing || 'south' }
+  const seed = profileSeed(profile.name)
+  const dwellMs = 20_000 + (seed % 14_000)
+  const travelMs = 5_000 + (seed % 2_500)
+  const cycleMs = dwellMs + travelMs
+  const clock = Math.max(0, Number(time) || 0) + (seed % cycleMs)
+  const leg = Math.floor(clock / cycleMs) % route.length
+  const elapsed = clock % cycleMs
+  const from = route[leg]
+  const to = route[(leg + 1) % route.length]
+  if (elapsed < dwellMs) return { ...from, mode: 'stationed', station: from, facing: from.facing || 'south' }
+  const rawProgress = (elapsed - dwellMs) / travelMs
+  const progress = rawProgress * rawProgress * (3 - 2 * rawProgress)
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const x = from.x + dx * progress
+  const y = from.y + dy * progress
+  if (!worldPointAllowed(x, y)) return { ...home, mode: 'stationed', station: home, facing: home.facing || 'south' }
+  return {
+    x,
+    y,
+    mode: 'roaming',
+    from,
+    to,
+    progress,
+    facing: Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'west' : 'east') : (dy < 0 ? 'north' : 'south')
+  }
+}
+
+function drawWorldGeometryOverlay(g) {
+  g.save()
+  g.lineWidth = 3
+  const drawAreas = (areas, fill, stroke) => {
+    g.fillStyle = fill
+    g.strokeStyle = stroke
+    for (const area of areas) {
+      g.fillRect(area.x, area.y, area.w, area.h)
+      g.strokeRect(area.x, area.y, area.w, area.h)
+    }
+  }
+  drawAreas(CANONICAL_WORLD_GEOMETRY.walkable, 'rgba(62, 211, 112, .18)', 'rgba(62, 211, 112, .9)')
+  drawAreas(CANONICAL_WORLD_GEOMETRY.obstacles, 'rgba(244, 76, 76, .28)', 'rgba(255, 92, 92, .95)')
+  drawAreas(CANONICAL_WORLD_GEOMETRY.occluders, 'rgba(173, 92, 255, .2)', 'rgba(190, 112, 255, .95)')
+  g.strokeStyle = 'rgba(74, 172, 255, .95)'
+  g.fillStyle = 'rgba(255, 211, 77, .95)'
+  for (const node of CANONICAL_NAV_NODES) {
+    for (const link of node.links) {
+      const target = CANONICAL_NAV_NODES.find(item => item.id === link)
+      if (!target) continue
+      g.beginPath()
+      g.moveTo(node.x, node.y)
+      g.lineTo(target.x, target.y)
+      g.stroke()
+    }
+    g.beginPath()
+    g.arc(node.x, node.y, 8, 0, Math.PI * 2)
+    g.fill()
+  }
+  g.restore()
+}
+
+
+function drawCanonicalCommunity(ctx, canvas, profiles, selectedName, p, t, hitMap, characterHitMap, art, showGeometry = false) {
   const worldW = 1001
   const worldH = 1765
   const buffer = canvas.__canonicalPolisBuffer || (canvas.__canonicalPolisBuffer = document.createElement('canvas'))
@@ -389,31 +523,38 @@ function drawCanonicalCommunity(ctx, canvas, profiles, selectedName, p, t, hitMa
   g.imageSmoothingEnabled = false
   g.clearRect(0, 0, worldW, worldH)
   g.drawImage(art.canonicalCommunity, 0, 0, worldW, worldH)
+  if (showGeometry) drawWorldGeometryOverlay(g)
 
-  const entries = buildCanonicalSceneEntries(profiles).sort((a, b) => a.anchor.y - b.anchor.y)
-  for (const { profile, anchor, scale } of entries) {
+  const entries = buildCanonicalSceneEntries(profiles)
+    .map(entry => ({ ...entry, motion: citizenMotionAt(entry.profile, entry.anchor, t) }))
+    .sort((a, b) => a.motion.y - b.motion.y)
+  for (const { profile, motion, scale } of entries) {
     const lpc = CURRENT_CITIZENS[profile.name]
     const image = lpc ? art[lpc.key] : null
     if (!image) continue
-    const row = profile.status === 'working' ? 1 : profile.status === 'waiting' ? 2 : 0
-    const loopMs = row === 1 ? 760 : row === 2 ? 1750 : 2100
+    const row = profile.status === 'working' ? 1 : ['waiting', 'failed'].includes(profile.status) ? 2 : 0
+    const loopMs = motion.mode === 'roaming' ? 620 : row === 1 ? 760 : row === 2 ? 1750 : 2100
     const phase = [...profile.name].reduce((sum, char) => sum + char.charCodeAt(0), 0) * 47
     const frame = Math.floor(((t + phase) % loopMs) / (loopMs / 4)) % 4
     const size = 64 * scale
-    const x = anchor.x - size / 2
-    const y = anchor.y - size
+    const x = motion.x - size / 2
+    const y = motion.y - size
 
     g.save()
     g.globalAlpha = profile.status === 'offline' ? .55 : 1
     g.fillStyle = 'rgba(22, 26, 38, .28)'
     g.beginPath()
-    g.ellipse(anchor.x, anchor.y - 2, 25, 7, 0, 0, Math.PI * 2)
+    g.ellipse(motion.x, motion.y - 2, 25, 7, 0, 0, Math.PI * 2)
     g.fill()
     if (profile.name === selectedName) {
       g.shadowColor = p.active
       g.shadowBlur = 18
     }
     g.imageSmoothingEnabled = false
+    if (motion.facing === 'west') {
+      g.translate(motion.x * 2, 0)
+      g.scale(-1, 1)
+    }
     g.drawImage(image, frame * 64, row * 64, 64, 64, x, y, size, size)
     g.restore()
   }
@@ -444,10 +585,10 @@ function drawCanonicalCommunity(ctx, canvas, profiles, selectedName, p, t, hitMa
   ctx.drawImage(buffer, ox, oy, dw, dh)
   ctx.restore()
 
-  const hits = entries.map(({ profile, anchor }) => ({
+  const hits = entries.map(({ profile, motion }) => ({
     name: profile.name,
-    x: ox + (anchor.x - 64) * fit,
-    y: oy + (anchor.y - 128) * fit,
+    x: ox + (motion.x - 64) * fit,
+    y: oy + (motion.y - 128) * fit,
     w: 128 * fit,
     h: 128 * fit
   })).reverse()
@@ -481,14 +622,14 @@ function hitTest(point, map) {
   return map.find(hit => point.x >= hit.x && point.x <= hit.x + hit.w && point.y >= hit.y && point.y <= hit.y + hit.h)
 }
 
-function PolisCanvas({ profiles, selectedName, onSelect, onOpen, onNewSession, onDirectMessage }) {
+function PolisCanvas({ profiles, selectedName, showGeometry, onSelect, onOpen, onNewSession, onDirectMessage }) {
   const canvasRef = useRef(null)
   const wrapRef = useRef(null)
   const hitMap = useRef([])
   const characterHitMap = useRef([])
   const [contextMenu, setContextMenu] = useState(null)
-  const stateRef = useRef({ profiles, selectedName })
-  stateRef.current = { profiles, selectedName }
+  const stateRef = useRef({ profiles, selectedName, showGeometry })
+  stateRef.current = { profiles, selectedName, showGeometry }
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -514,7 +655,7 @@ function PolisCanvas({ profiles, selectedName, onSelect, onOpen, onNewSession, o
         const ctx = canvas.getContext('2d')
         if (polisArtCache?.canonicalCommunity) {
           try {
-            drawCanonicalCommunity(ctx, canvas, stateRef.current.profiles, stateRef.current.selectedName, palette, time, hitMap, characterHitMap, polisArtCache)
+            drawCanonicalCommunity(ctx, canvas, stateRef.current.profiles, stateRef.current.selectedName, palette, time, hitMap, characterHitMap, polisArtCache, stateRef.current.showGeometry)
           } catch (error) {
             polisArtError = `render: ${error instanceof Error ? error.message : String(error)}`
             hitMap.current = []
@@ -1000,6 +1141,7 @@ function PolisPage() {
   const gateway = useValue(host.state.gateway)
   const [occupations, assignOccupation] = useOccupations()
   const [soundEnabled, toggleSound] = useSoundSetting()
+  const [showGeometry, setShowGeometry] = useState(false)
   const liveActivities = useLiveActivities(roster.data?.profiles || [], soundEnabled)
   const [selectedName, setSelectedName] = useState('default')
   const profiles = useMemo(() => (roster.data?.profiles || []).map(profile => {
@@ -1053,12 +1195,12 @@ function PolisPage() {
         className: 'flex min-h-12 flex-wrap items-center justify-between gap-3 border-b border-(--ui-stroke-secondary) px-4 py-2',
         children: [
           jsxs('div', { className: 'flex items-center gap-3', children: [jsx('div', { className: 'grid h-7 w-7 place-items-center rounded border border-(--ui-accent) text-(--ui-accent)', children: 'Ω' }), jsxs('div', { children: [jsx('div', { className: 'text-sm font-semibold', children: 'The Polis of Hermes' }), jsx('div', { className: 'text-[0.6875rem] text-(--ui-text-tertiary)', children: 'A living city of your agent profiles' })] })] }),
-          jsxs('div', { className: 'flex items-center gap-2 text-[0.6875rem]', children: [jsx('span', { className: 'rounded-full border border-(--ui-stroke-secondary) px-2 py-1', children: `${profiles.length} citizens` }), jsx('span', { className: 'rounded-full border border-(--ui-accent) px-2 py-1 text-(--ui-accent)', children: `${counts.working || 0} working` }), (counts.waiting || counts.failed) ? jsx('span', { className: 'rounded-full border border-(--ui-accent) px-2 py-1 text-(--ui-accent)', children: `${(counts.waiting || 0) + (counts.failed || 0)} need attention` }) : null, jsx('span', { className: 'rounded-full border border-(--ui-stroke-secondary) px-2 py-1 text-(--ui-text-tertiary)', children: `${counts.idle || 0} resting` }), jsx('button', { type: 'button', title: soundEnabled ? 'Mute polis sounds' : 'Enable polis sounds', onClick: toggleSound, className: cx('grid h-7 w-7 place-items-center rounded border', soundEnabled ? 'border-(--ui-accent) text-(--ui-accent)' : 'border-(--ui-stroke-secondary)'), children: jsx(Codicon, { name: soundEnabled ? 'unmute' : 'mute' }) }), jsx('button', { type: 'button', title: 'Refresh roster', onClick: () => roster.refetch(), className: 'grid h-7 w-7 place-items-center rounded border border-(--ui-stroke-secondary) hover:border-(--ui-accent)', children: jsx(Codicon, { name: roster.isFetching ? 'loading' : 'refresh', className: roster.isFetching ? 'animate-spin' : '' }) })] })
+          jsxs('div', { className: 'flex items-center gap-2 text-[0.6875rem]', children: [jsx('span', { className: 'rounded-full border border-(--ui-stroke-secondary) px-2 py-1', children: `${profiles.length} citizens` }), jsx('span', { className: 'rounded-full border border-(--ui-accent) px-2 py-1 text-(--ui-accent)', children: `${counts.working || 0} working` }), (counts.waiting || counts.failed) ? jsx('span', { className: 'rounded-full border border-(--ui-accent) px-2 py-1 text-(--ui-accent)', children: `${(counts.waiting || 0) + (counts.failed || 0)} need attention` }) : null, jsx('span', { className: 'rounded-full border border-(--ui-stroke-secondary) px-2 py-1 text-(--ui-text-tertiary)', children: `${counts.idle || 0} resting` }), jsx('button', { type: 'button', title: 'World geometry: green walkable, red blocked, purple occlusion, blue routes', onClick: () => setShowGeometry(value => !value), className: cx('inline-flex h-7 items-center gap-1 rounded border px-2', showGeometry ? 'border-(--ui-accent) text-(--ui-accent)' : 'border-(--ui-stroke-secondary) text-(--ui-text-tertiary)'), children: [jsx(Codicon, { name: 'map' }), 'World geometry'] }), jsx('button', { type: 'button', title: soundEnabled ? 'Mute polis sounds' : 'Enable polis sounds', onClick: toggleSound, className: cx('grid h-7 w-7 place-items-center rounded border', soundEnabled ? 'border-(--ui-accent) text-(--ui-accent)' : 'border-(--ui-stroke-secondary)'), children: jsx(Codicon, { name: soundEnabled ? 'unmute' : 'mute' }) }), jsx('button', { type: 'button', title: 'Refresh roster', onClick: () => roster.refetch(), className: 'grid h-7 w-7 place-items-center rounded border border-(--ui-stroke-secondary) hover:border-(--ui-accent)', children: jsx(Codicon, { name: roster.isFetching ? 'loading' : 'refresh', className: roster.isFetching ? 'animate-spin' : '' }) })] })
         ]
       }),
       jsxs('main', {
         className: 'm-3 flex min-h-0 flex-1 overflow-hidden rounded-xl border border-(--ui-stroke-secondary)',
-        children: [jsx(PolisCanvas, { profiles, selectedName: selected?.name, onSelect: setSelectedName, onOpen: openByName, onNewSession: newSessionByName, onDirectMessage: directMessageByName }), jsx(DetailPanel, { profiles, profile: selected, onSelect: setSelectedName, onOccupation: assignOccupation, onOpen: openByName })]
+        children: [jsx(PolisCanvas, { profiles, selectedName: selected?.name, showGeometry, onSelect: setSelectedName, onOpen: openByName, onNewSession: newSessionByName, onDirectMessage: directMessageByName }), jsx(DetailPanel, { profiles, profile: selected, onSelect: setSelectedName, onOccupation: assignOccupation, onOpen: openByName })]
       })
     ]
   })
