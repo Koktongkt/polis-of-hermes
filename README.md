@@ -4,19 +4,14 @@ A living ancient-Greek control surface for [Hermes Desktop](https://github.com/N
 
 ## Features
 
-- Animated 2.5D Mediterranean pixel-art polis
+- Animated Mediterranean LPC pixel-art polis
 - One persistent citizen per Hermes profile
 - Configurable occupations: herald, blacksmith, scholar, merchant, warrior, and scribe
-- Genuine frame-by-frame character animation atlases inspired by the Hermes Pet animation model
+- Profile-specific frame-by-frame LPC character animation atlases
 - Occupation-specific idle, working, and waiting loops
 - Live gateway-driven working, waiting, completion, failure, recent, idle, and offline states
 - Concurrent-session activity cues and one-hour activity history
-- Pet-style four-frame environment atlas for stepped sky, sea, tree-canopy, and fountain motion
-- Secondary ambience for smoke, sparks, birds, and drifting pollen
 - Silhouette-following selection glow instead of rectangular bounding boxes
-- Perspective-matched plinths, silhouette-derived contact shadows, foreground floor overlap, and doorway-aligned worn paths that seat each workplace inside its terrace zone
-- Explicit upper/lower terrace painter ordering, with upper citizens anchored in the central walkway so foreground workplaces cannot read as platforms beneath them
-- Illustrated Mediterranean nameplates and title plaque
 - Clickable citizens, occupation persistence, Hermes-native conversation opening, and direct messaging into either the latest visible conversation or a fresh chat
 - Compact resizable agent panel with a persisted user-selected width
 - Expandable per-agent action cards with live status and one-hour activity logs
@@ -49,17 +44,14 @@ No package installation or build step is required. The plugin is plain JavaScrip
 polis-of-hermes/
 ├── plugin.js                  # Plugin UI, state model, and canvas renderer
 └── assets/
-    ├── polis-terraces.webp       # Approved static environment source
-    ├── environment-animation.webp # Four-frame 960×540 environment atlas
-    ├── building-*.webp           # Occupation workplaces
-    ├── character-*.webp          # Base occupation portraits
-    ├── character-animation-*.webp
-    ├── process_art.py
-    ├── process_environment_animation.py
-    └── process_character_animations.py
+    ├── lpc-builder/sources/image_c76574.png # Current canonical community
+    ├── lpc-hermes-example/                  # Hermes atlas + credits
+    └── lpc-review-batch/                    # Aivory, Cody, Alpha Sage atlases + credits
 ```
 
-The runtime uses the compact WebP assets. PNG sources and generated intermediates are intentionally excluded from the repository.
+The runtime has one visual system: the canonical LPC community and its four
+profile-specific citizen atlases. Exact generator selections and per-layer
+credits remain beside the runtime atlases for reproducibility and attribution.
 
 ## Character animation model
 
@@ -73,6 +65,10 @@ Each occupation atlas contains a 4×3 frame grid:
 
 The live profile state selects a row, while deterministic per-profile timing prevents all citizens from animating in sync.
 
+Each citizen's identity is profile-based and independent from the occupation
+selector. The 64×64 LPC cells use nearest-neighbour rendering to preserve pixel
+clusters. Occupation labels and activity descriptions remain configurable.
+
 ## Development
 
 Validate the plugin syntax with:
@@ -82,8 +78,6 @@ node --check plugin.js
 ```
 
 After editing, Hermes Desktop normally hot-reloads the plugin. If it does not, run **Reload desktop plugins** from the command palette.
-
-The processing utilities require Python, Pillow, NumPy, and SciPy and are development-only. Their source-image paths should be adjusted before regeneration.
 
 ## Testing
 
@@ -99,15 +93,19 @@ Run the visual and asset-integrity suite with:
 python -m unittest tests/test_visual_regression.py -v
 ```
 
-The visual suite verifies the four-frame runtime atlas, bounds lossy WebP variation outside approved motion regions, checks every occupation atlas, and compares a deterministic scene render against the committed depth-order reference. Run `tests/render_visual_fixtures.py` deliberately when an approved visual change requires updating that reference. `tests/render_tile_prototypes.py` creates a review-only comparison of three treatments for removing one raised occupation pad; it does not alter runtime artwork.
-
-## Environment animation model
-
-The environment uses a 4×1 atlas of complete 960×540 frames. The processor isolates clouds, sea texture, peripheral foliage, and fountain water from the approved illustration, fills the vacated pixels, then recomposites those regions at four stepped poses. The renderer clips one frame at a time using the same fixed-frame approach as Hermes Pets. Architecture, paths, tree trunks, and the fountain stonework remain anchored.
+The visual suite verifies the canonical environment dimensions and all four
+profile animation atlases. The Node suite also enforces that no older renderer
+or older runtime art path can return.
 
 ## Artwork and provenance
 
-The bundled environment, buildings, and character assets are original project artwork generated and processed for The Polis of Hermes. External reference images are not bundled. Hermes Pets were used as an animation-system reference; no Hermes Pet sprites are copied into this project.
+The profile sprites are generated from the Universal LPC Spritesheet
+Character Generator. Their exact selections, upstream revision, and
+generator-produced credits are preserved under `assets/lpc-hermes-example/`
+and `assets/lpc-review-batch/`. The licenses recorded for individual LPC layers
+govern those files and are not replaced by the plugin's MIT license. The
+canonical environment is currently a provided review reference with unresolved
+provenance and must not be redistributed until that provenance is resolved.
 
 ## License
 

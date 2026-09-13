@@ -35,98 +35,6 @@ function load(names, constants = []) {
   return context.loaded
 }
 
-test('scene plan paints upper citizens before lower architecture', () => {
-  const { buildSceneEntriesV4, sceneRenderPlanV4 } = load(
-    ['buildSceneEntriesV4', 'sceneRenderPlanV4'],
-    ['POLIS_LAYOUTS_V4']
-  )
-  const profiles = ['upper-left', 'upper-right', 'lower-left', 'lower-right'].map(name => ({ name }))
-  const entries = buildSceneEntriesV4(profiles)
-  const plan = sceneRenderPlanV4(entries)
-
-  const lastUpperCitizen = Math.max(
-    ...plan.map((step, index) => step.row === 'upper' && step.layer === 'nameplate' ? index : -1)
-  )
-  const firstLowerArchitecture = plan.findIndex(step => step.row === 'lower' && step.layer === 'foundation')
-
-  assert.ok(lastUpperCitizen >= 0)
-  assert.ok(firstLowerArchitecture > lastUpperCitizen)
-})
-
-test('scene plan always paints foreground ambience before citizens in the deepest occupied row', () => {
-  const { sceneRenderPlanV4 } = load(['sceneRenderPlanV4'])
-  const oneCitizen = [{ row: 'upper', index: 0 }]
-  const fourCitizens = [
-    { row: 'upper', index: 0 }, { row: 'upper', index: 1 },
-    { row: 'lower', index: 2 }, { row: 'lower', index: 3 }
-  ]
-
-  for (const entries of [oneCitizen, fourCitizens]) {
-    const plan = sceneRenderPlanV4(entries)
-    const ambience = plan.findIndex(step => step.layer === 'ambience')
-    const deepestRow = entries.some(entry => entry.row === 'lower') ? 'lower' : 'upper'
-    const firstDeepCitizen = plan.findIndex(step => step.layer === 'character' && step.row === deepestRow)
-    const lastDeepArchitecture = plan.findLastIndex(step => step.layer === 'props' && step.row === deepestRow)
-    assert.ok(ambience > lastDeepArchitecture)
-    assert.ok(ambience < firstDeepCitizen)
-  }
-})
-
-test('scene plan preserves path, architecture, citizen, activity and nameplate order within each terrace', () => {
-  const { buildSceneEntriesV4, sceneRenderPlanV4 } = load(
-    ['buildSceneEntriesV4', 'sceneRenderPlanV4'],
-    ['POLIS_LAYOUTS_V4']
-  )
-  const entries = buildSceneEntriesV4(['a', 'b', 'c', 'd'].map(name => ({ name })))
-  const plan = sceneRenderPlanV4(entries)
-
-  for (const row of ['upper', 'lower']) {
-    const layers = plan.filter(step => step.row === row).map(step => step.layer)
-    const first = layer => layers.indexOf(layer)
-    const last = layer => layers.lastIndexOf(layer)
-    assert.ok(last('path') < first('foundation'), `${row}: paths must be behind architecture`)
-    assert.ok(last('props') < first('character'), `${row}: architecture must be behind citizens`)
-    assert.ok(last('character') < first('activity'), `${row}: activity cues must follow citizens`)
-    assert.ok(last('activity') < first('nameplate'), `${row}: nameplates must be topmost in their row`)
-  }
-})
-
-test('scene entries retain the approved two-by-two terrace assignment', () => {
-  const { buildSceneEntriesV4 } = load(['buildSceneEntriesV4'], ['POLIS_LAYOUTS_V4'])
-  const entries = buildSceneEntriesV4(['a', 'b', 'c', 'd', 'ignored'].map(name => ({ name })))
-  assert.deepEqual(
-    entries.map(entry => [entry.profile.name, entry.row, entry.site.x, entry.site.y]),
-    [
-      ['a', 'upper', 74, 76],
-      ['b', 'upper', 246, 76],
-      ['c', 'lower', 74, 146],
-      ['d', 'lower', 246, 146]
-    ]
-  )
-})
-
-test('upper citizens move into the central walkway while lower citizens retain their anchors', () => {
-  const { agentCenterV4 } = load(['agentCenterV4'])
-  assert.equal(agentCenterV4({ x: 74, y: 76 }), 382)
-  assert.equal(agentCenterV4({ x: 246, y: 76 }), 578)
-  assert.equal(agentCenterV4({ x: 74, y: 146 }), 162)
-  assert.equal(agentCenterV4({ x: 246, y: 146 }), 678)
-})
-
-test('upper site hit areas include both the workplace and relocated citizen', () => {
-  const { agentCenterV4, siteHitBoxV4 } = load(['agentCenterV4', 'siteHitBoxV4'])
-
-  for (const site of [{ x: 74, y: 76 }, { x: 246, y: 76 }]) {
-    const box = siteHitBoxV4(site)
-    const citizenCenter = agentCenterV4(site)
-    const workplaceLeft = site.x * 3 - 135
-    const workplaceRight = site.x * 3 + 135
-
-    assert.ok(box.x <= workplaceLeft)
-    assert.ok(box.x + box.w >= workplaceRight)
-    assert.ok(citizenCenter >= box.x && citizenCenter <= box.x + box.w)
-  }
-})
 
 test('pointer mapping respects CSS-to-backing-store scaling', () => {
   const { canvasPoint } = load(['canvasPoint'])
@@ -146,4 +54,37 @@ test('hit testing chooses the first topmost matching character and rejects blank
   ]
   assert.equal(hitTest({ x: 15, y: 15 }, map)?.name, 'top')
   assert.equal(hitTest({ x: 100, y: 100 }, map), undefined)
+})
+
+test('canonical community assigns detached citizens to approved native-image foot anchors', () => {
+  const { buildCanonicalSceneEntries } = load(
+    ['buildCanonicalSceneEntries'],
+    ['CANONICAL_CITIZEN_ANCHORS']
+  )
+  const profiles = ['default', 'aivory', 'cody', 'alpha_sage', 'ignored'].map(name => ({ name }))
+  const entries = buildCanonicalSceneEntries(profiles)
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(entries.map(entry => [entry.profile.name, entry.anchor.x, entry.anchor.y]))),
+    [
+      ['default', 414, 190],
+      ['aivory', 272, 508],
+      ['cody', 784, 300],
+      ['alpha_sage', 330, 758]
+    ]
+  )
+  assert.equal(entries.every(entry => entry.scale === 2), true)
+})
+
+test('canonical community is the only renderer and loads only current art', () => {
+  assert.match(source, /canonicalCommunity:\s*'lpc-builder\/sources\/image_c76574\.png'/)
+  assert.match(source, /drawCanonicalCommunity/)
+  assert.doesNotMatch(source, /USE_CANONICAL_LPC_COMMUNITY|USE_LPC_CHARACTER_TEST/)
+  assert.doesNotMatch(source, /drawWorldV[234]?|drawWorld\s*\(/)
+  assert.doesNotMatch(source, /polis-terraces|environment-animation|building-herald|character-animation-herald/)
+})
+
+test('canonical asset failures use a neutral error canvas, never an older city design', () => {
+  assert.match(source, /function drawCanonicalError/)
+  assert.match(source, /drawCanonicalError\(ctx, canvas, palette, polisArtError\)/)
 })
