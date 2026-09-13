@@ -58,15 +58,24 @@ credits remain beside the runtime atlases for reproducibility and attribution.
 
 ## Character animation model
 
-Each occupation atlas contains a 4×3 frame grid:
+Each citizen atlas contains a 13×25 LPC action grid. Directional actions use
+four rows in the native LPC order (north, west, south, east), so a walking
+citizen turns their whole body toward the route instead of sliding sideways
+while looking forward.
 
-| Row | State | Behavior |
+| Rows | Action | Behavior |
 |---|---|---|
-| 1 | Idle | Breathing, blinking, looking, and settling |
-| 2 | Working | Occupation-specific work loop |
-| 3 | Waiting | Attention and inspection gestures |
+| 1–4 | Idle | Directional breathing and settling |
+| 5–8 | Walk | Eight-frame directional locomotion |
+| 9–12 | Working | Directional spellcast/craft loop |
+| 13–16 | Waiting / ambient | Directional attention gestures |
+| 17–20 | Complete | Directional celebratory jump |
+| 21–24 | Sit | Reserved rest action |
+| 25 | Failed | Hurt/recovery loop |
 
-The live profile state selects a row, while deterministic per-profile timing prevents all citizens from animating in sync.
+Like Hermes Pet reactions, live profile state selects a distinct action while
+deterministic per-profile timing prevents all citizens from animating in sync.
+Idle citizens also occasionally gesture while dwelling at a station.
 
 Idle and recently active citizens may roam along conservative, authored navigation edges. Working, waiting, failed, and offline citizens remain at their home environment object so ambient movement never obscures real agent state. Citizen drawing, depth order, selection, and hit testing all use the same live foot position.
 

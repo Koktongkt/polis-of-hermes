@@ -13,17 +13,26 @@ A review-only character study for changing **The Polis of Hermes** citizens from
 - Headwear: Thick Headband, yellow/gold
 - Cape: Solid, blue
 
-The exact generator state is preserved in `hermes-lpc-selection.json`. The generated full sheet is `hermes-lpc-full-spritesheet.png`; `build_concept.py` deterministically extracts the down-facing LPC frames used in `hermes-lpc-polis-atlas.png` and builds the review board.
+The exact generator state is preserved in `hermes-lpc-selection.json`. Export a
+full sheet from Universal LPC revision `d44ea7d69` as
+`assets/hermes-full-spritesheet.png`; the shared atlas builder then extracts the
+runtime actions into `hermes-lpc-polis-atlas.png`. Full sheets are ignored build
+inputs rather than runtime assets.
 
-## Prototype animation contract
+## Runtime animation contract
 
-The review atlas is a 4×3 grid of 64×64 cells:
+The runtime atlas is a 13×25 grid of 64×64 cells, extracted from the full LPC
+sheet by `../lpc-builder/build_action_atlases.py`:
 
-| Row | Polis state | LPC source |
+| Rows | Polis state | LPC source |
 |---|---|---|
-| 1 | Idle | Down-facing Idle frames 0, 1, 0, 1 |
-| 2 | Working / dispatch | Down-facing Spellcast frames 0–3 |
-| 3 | Waiting / movement study | Down-facing Walk frames 1–4 |
+| 1–4 | Idle | Four directions of LPC Idle |
+| 5–8 | Roaming | Four directions of LPC Walk |
+| 9–12 | Working | Four directions of LPC Spellcast |
+| 13–16 | Waiting / ambient | Four directions of LPC Emote |
+| 17–20 | Complete | Four directions of LPC Jump |
+| 21–24 | Rest | Four directions of LPC Sit |
+| 25 | Failed | LPC Hurt |
 
 ## Provenance and licensing
 

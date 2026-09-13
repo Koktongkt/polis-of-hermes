@@ -102,6 +102,53 @@ test('ambient citizens alternate between meaningful stations and safe authored t
   assert.equal(Number.isInteger(profileSeed('default')), true)
 })
 
+test('roaming citizens use true directional walk rows instead of facing forward', () => {
+  const { citizenAnimationAt } = load(
+    ['profileSeed', 'citizenAnimationAt'],
+    ['LPC_DIRECTION_ROWS', 'LPC_ACTIONS']
+  )
+  const expectedRows = { north: 4, west: 5, south: 6, east: 7 }
+
+  for (const [facing, row] of Object.entries(expectedRows)) {
+    const animation = citizenAnimationAt(
+      { name: 'default', status: 'idle' },
+      { mode: 'roaming', facing },
+      1_250
+    )
+    assert.equal(animation.action, 'walk')
+    assert.equal(animation.row, row)
+    assert.ok(animation.frame >= 1 && animation.frame <= 8)
+  }
+})
+
+test('citizens react to Hermes activity states with distinct action loops', () => {
+  const { citizenAnimationAt } = load(
+    ['profileSeed', 'citizenAnimationAt'],
+    ['LPC_DIRECTION_ROWS', 'LPC_ACTIONS']
+  )
+  const motion = { mode: 'stationed', facing: 'east' }
+  const expected = {
+    working: 'spellcast',
+    waiting: 'emote',
+    failed: 'hurt',
+    complete: 'jump'
+  }
+
+  for (const [status, action] of Object.entries(expected)) {
+    const animation = citizenAnimationAt({ name: 'default', status }, motion, 2_500)
+    assert.equal(animation.action, action)
+  }
+  assert.notEqual(
+    citizenAnimationAt({ name: 'default', status: 'working' }, motion, 2_500).row,
+    citizenAnimationAt({ name: 'default', status: 'waiting' }, motion, 2_500).row
+  )
+})
+
+test('directional movement does not mirror or rotate forward-facing artwork', () => {
+  assert.doesNotMatch(source, /motion\.facing === 'west'[\s\S]{0,160}scale\(-1, 1\)/)
+  assert.match(source, /citizenAnimationAt\(profile, motion, t\)/)
+})
+
 test('working and attention states keep citizens stationed at their home environment object', () => {
   const { citizenMotionAt, buildCanonicalSceneEntries } = load(
     ['profileSeed', 'citizenMotionAt', 'buildCanonicalSceneEntries'],

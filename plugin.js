@@ -82,6 +82,16 @@ const CURRENT_CITIZENS = {
   cody: { key: 'lpcCody', label: 'Cody' },
   alpha_sage: { key: 'lpcAlphaSage', label: 'Alpha Sage' }
 }
+const LPC_DIRECTION_ROWS = { north: 0, west: 1, south: 2, east: 3 }
+const LPC_ACTIONS = {
+  idle: { row: 0, frames: [0, 0, 1], frameMs: 700 },
+  walk: { row: 4, frames: [1, 2, 3, 4, 5, 6, 7, 8], frameMs: 95 },
+  spellcast: { row: 8, frames: [0, 1, 2, 3, 4, 5, 6], frameMs: 120 },
+  emote: { row: 12, frames: [0, 0, 0, 1, 1, 2, 2], frameMs: 260 },
+  jump: { row: 16, frames: [0, 1, 2, 3, 4, 1], frameMs: 130 },
+  sit: { row: 20, frames: [0, 0, 1, 1, 2, 2], frameMs: 420 },
+  hurt: { row: 24, frames: [0, 1, 2, 3, 4, 5], frameMs: 180, directional: false }
+}
 
 const DEFAULT_OCCUPATIONS = {
   default: 'herald',
@@ -480,6 +490,23 @@ function citizenMotionAt(profile, anchor, time) {
   }
 }
 
+function citizenAnimationAt(profile, motion, time) {
+  const seed = profileSeed(profile.name)
+  let action = 'idle'
+  if (motion.mode === 'roaming') action = 'walk'
+  else if (profile.status === 'working') action = 'spellcast'
+  else if (profile.status === 'waiting') action = 'emote'
+  else if (profile.status === 'failed') action = 'hurt'
+  else if (profile.status === 'complete') action = 'jump'
+  else if (['idle', 'recent'].includes(profile.status) && Math.floor((Math.max(0, Number(time) || 0) + seed) / 8_000) % 5 === 4) action = 'emote'
+
+  const config = LPC_ACTIONS[action]
+  const direction = LPC_DIRECTION_ROWS[motion.facing] ?? LPC_DIRECTION_ROWS.south
+  const row = config.row + (config.directional === false ? 0 : direction)
+  const step = Math.floor((Math.max(0, Number(time) || 0) + (seed % 997)) / config.frameMs)
+  return { action, row, frame: config.frames[step % config.frames.length] }
+}
+
 function drawWorldGeometryOverlay(g) {
   g.save()
   g.lineWidth = 3
@@ -532,10 +559,7 @@ function drawCanonicalCommunity(ctx, canvas, profiles, selectedName, p, t, hitMa
     const lpc = CURRENT_CITIZENS[profile.name]
     const image = lpc ? art[lpc.key] : null
     if (!image) continue
-    const row = profile.status === 'working' ? 1 : ['waiting', 'failed'].includes(profile.status) ? 2 : 0
-    const loopMs = motion.mode === 'roaming' ? 620 : row === 1 ? 760 : row === 2 ? 1750 : 2100
-    const phase = [...profile.name].reduce((sum, char) => sum + char.charCodeAt(0), 0) * 47
-    const frame = Math.floor(((t + phase) % loopMs) / (loopMs / 4)) % 4
+    const animation = citizenAnimationAt(profile, motion, t)
     const size = 64 * scale
     const x = motion.x - size / 2
     const y = motion.y - size
@@ -551,11 +575,7 @@ function drawCanonicalCommunity(ctx, canvas, profiles, selectedName, p, t, hitMa
       g.shadowBlur = 18
     }
     g.imageSmoothingEnabled = false
-    if (motion.facing === 'west') {
-      g.translate(motion.x * 2, 0)
-      g.scale(-1, 1)
-    }
-    g.drawImage(image, frame * 64, row * 64, 64, 64, x, y, size, size)
+    g.drawImage(image, animation.frame * 64, animation.row * 64, 64, 64, x, y, size, size)
     g.restore()
   }
 

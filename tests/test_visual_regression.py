@@ -25,7 +25,7 @@ class EnvironmentIntegrityTests(unittest.TestCase):
                 original.convert("RGBA").tobytes(),
             )
 
-    def test_current_profile_atlases_have_expected_animation_grid(self):
+    def test_current_profile_atlases_have_directional_action_grid(self):
         atlases = (
             ASSETS / "lpc-hermes-example" / "hermes-lpc-polis-atlas.png",
             ASSETS / "lpc-review-batch" / "aivory" / "aivory-polis-atlas.png",
@@ -35,14 +35,22 @@ class EnvironmentIntegrityTests(unittest.TestCase):
         for atlas_path in atlases:
             with self.subTest(atlas=atlas_path.name), Image.open(atlas_path) as atlas:
                 rgba = atlas.convert("RGBA")
-                self.assertEqual(rgba.size, (256, 192))
-                for row in range(3):
-                    frames = [
-                        rgba.crop((column * 64, row * 64, (column + 1) * 64, (row + 1) * 64))
-                        for column in range(4)
-                    ]
-                    self.assertTrue(all(frame.getbbox() for frame in frames))
-                    self.assertGreaterEqual(len({frame.tobytes() for frame in frames}), 2)
+                self.assertEqual(rgba.size, (832, 1600))
+                self.assertEqual(rgba.getpixel((0, 0))[3], 0, "atlas must preserve transparency, not the generator preview grid")
+                for first_row, columns in ((0, (0, 1)), (4, range(1, 9)), (8, range(7)), (12, range(3)), (16, range(5)), (20, range(3))):
+                    for row in range(first_row, first_row + 4):
+                        frames = [
+                            rgba.crop((column * 64, row * 64, (column + 1) * 64, (row + 1) * 64))
+                            for column in columns
+                        ]
+                        self.assertTrue(all(frame.getbbox() for frame in frames))
+                        self.assertGreaterEqual(len({frame.tobytes() for frame in frames}), 2)
+
+                walk_directions = {
+                    rgba.crop((2 * 64, row * 64, 3 * 64, (row + 1) * 64)).tobytes()
+                    for row in range(4, 8)
+                }
+                self.assertEqual(len(walk_directions), 4)
 
 if __name__ == "__main__":
     unittest.main()
